@@ -86,7 +86,7 @@ npm run test:e2e
 
 浏览器测试使用本机 Chrome，测试服务仅在127.0.0.1:4321运行，使用独立临时目录与固定测试数据，不写入实际目录缓存或个人收藏。生产服务使用4317。修改源代码后重新构建再启动；`npm run dev`可运行Vite开发页面，API需要本地服务同时运行。
 
-Vue类型检查使用兼容的TypeScript5.9.3与vue-tsc，服务端单独执行tsc。依赖由package-lock.json锁定，不需要安装全局包。开发目录、验证命令与日志约定见 [开发说明](docs/DEVELOPMENT.md)。
+Vue类型检查使用TypeScript6.0.3与vue-tsc，服务端单独执行tsc。依赖由package-lock.json锁定，不需要安装全局包。开发目录、验证命令与日志约定见 [开发说明](docs/DEVELOPMENT.md)。
 
 ## 来源
 
