@@ -1,0 +1,11 @@
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { AnimeService } from './service.js';
+import { configureNetwork } from './network.js';
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+await configureNetwork();
+const service = new AnimeService({ directory: resolve(root, '.local'), overridesPath: resolve(root, 'data/overrides.json') });
+await service.initialize(); await service.refresh();
+const status = service.status();
+console.log(JSON.stringify({ items: service.catalog()?.items.length ?? 0, ...status }, null, 2));
+if (!status.hasCatalog || Object.values(status.sources).some(source => source.error)) process.exitCode = 1;

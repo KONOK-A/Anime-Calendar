@@ -1,0 +1,22 @@
+# Installed dependencies and reproducible build output
+node_modules/
+dist/
+
+# Runtime cache, local archives and development logs
+.local/
+*.log
+
+# Test reports and compiler caches
+test-results/
+playwright-report/
+blob-report/
+coverage/
+*.tsbuildinfo
+
+# Local environment and operating-system files
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+Desktop.ini

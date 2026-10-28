@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "active": [],
+  "events": [],
+  "rules": [
+    {
+      "animeId": "bgm:632061",
+      "broadcast": "R/2026-10-09T12:00:00Z/P14D",
+      "sourceUrl": "https://www.shopro.co.jp/anime/duelmasters_lost/",
+      "note": "官网注明隔周周五21:00（日本时间）、全四话；上游P7D周期不符。隔周规则暂不自动推算，请查看官网。"
+    },
+    {
+      "animeId": "bgm:513878",
+      "dateOnly": true,
+      "sourceUrl": "https://about.netflix.com/ja/news/anime-nyc-2026",
+      "note": "官方材料确认2026-10-20一次性上线；具体分钟未核实，仅显示日期。"
+    },
+    {
+      "animeId": "bgm:412008", "kind": "network", "broadcast": "R/2026-09-30T15:30:00Z/P7D",
+      "platform": "ABEMA", "regions": ["JP"], "sourceUrl": "https://tenken-anime.com/onair.html",
+      "note": "官网：9月30日起每周三24:30日本时间，地上波一周先行。"
+    },
+    {
+      "animeId": "bgm:511936", "kind": "network", "broadcast": "R/2026-10-03T12:00:00Z/P7D",
+      "platform": "U-NEXT / Netflix / アニメタイムズ", "regions": ["JP"], "sourceUrl": "https://romelia-senki.com/onair/",
+      "note": "官网确认10月3日21:00日本时间开始地上波先行；源U-NEXT的9月17日记录不符。后续按周播预计，即北京时间每周六20:00。"
+    },
+    {
+      "animeId": "bgm:393010", "kind": "network", "broadcast": "R/2026-10-07T13:00:00Z/P7D",
+      "platform": "dアニメストア", "regions": ["JP"], "sourceUrl": "https://tanmoshi-anime.jp/Season2/onair/index.html",
+      "note": "官网：10月7日起每周三22:00日本时间地上波先行、单独网络最速；AT-X21:30更早，按网络时刻显示。"
+    },
+    {
+      "animeId": "bgm:616808", "kind": "network", "broadcast": "R/2026-09-26T13:30:00Z/P7D",
+      "platform": "ABEMA / U-NEXT", "regions": ["JP"], "sourceUrl": "https://lastboss-anime.com/news/index00320000.html",
+      "note": "官网：9月26日起每周六22:30日本时间，地上波一周先行。"
+    },
+    {
+      "animeId": "bgm:657656", "kind": "network", "broadcast": "R/2026-09-27T14:30:00Z/P7D",
+      "platform": "Prime Video", "regions": ["JP"], "sourceUrl": "https://tempal-anime.net/onair/index.html",
+      "note": "官网：9月27日起每周日23:30日本时间地上波先行；其他平台10月4日起。"
+    },
+    {
+      "animeId": "bgm:622288", "kind": "network", "broadcast": "R/2026-10-01T13:00:00Z/P7D",
+      "platform": "dアニメストア / ABEMA / U-NEXT / アニメ放題", "regions": ["JP"], "sourceUrl": "https://fxkurumi-info.com/onair/",
+      "note": "官网：10月1日起每周四22:00日本时间最速先行配信；晚于AT-X21:30，早于地上波22:30。"
+    },
+    {
+      "animeId": "bgm:624923", "kind": "network", "broadcast": "R/2026-10-05T13:00:00Z/P7D",
+      "platform": "dアニメストア / U-NEXT / アニメ放題", "regions": ["JP"], "sourceUrl": "https://horemajo-anime.com/onair/",
+      "note": "官网：10月5日起每周一22:00日本时间地上波先行；晚于AT-X21:30，采用网络时刻。"
+    },
+    {
+      "animeId": "bgm:596771", "kind": "network", "broadcast": "R/2026-10-04T15:00:00Z/P7D",
+      "platform": "dアニメストア / Hulu / U-NEXT / アニメ放題", "regions": ["JP"], "sourceUrl": "https://yowaki-max-anime.com/onair/",
+      "note": "官网：10月4日24:00日本时间起地上波先行、最速配信，即日本周一00:00、北京周日23:00。"
+    },
+    {
+      "animeId": "bgm:486456", "kind": "network", "broadcast": "R/2026-10-07T13:30:00Z/P7D",
+      "platform": "Prime Video", "regions": ["JP"], "sourceUrl": "https://sasapi-anime.com/onair.html",
+      "note": "官网：10月7日起每周三22:30日本时间地上波先行、单独网络最速；晚于AT-X22:00，采用网络时刻。"
+    },
+    {
+      "animeId": "bgm:542007", "kind": "network", "broadcast": "R/2026-10-03T13:00:00Z/P7D",
+      "platform": "ABEMA / Prime Video", "regions": ["JP"], "sourceUrl": "https://daiseijo-anime.com/onair/",
+      "note": "官网：10月3日22:00日本时间起地上波一周先行；首日第1、2话同时上线。采用22:00最早VOD，ABEMA免费频道22:30是另一口径。"
+    },
+    {
+      "animeId": "bgm:537738", "kind": "network", "broadcast": "R/2026-10-08T15:30:00Z/P7D",
+      "platform": "ABEMAプレミアム", "regions": ["JP"], "sourceUrl": "https://toaru-project.com/item/onair/index.html",
+      "note": "官网：ABEMA Premium从10月8日24:30日本时间先配。10月3日23:00只是第1话实时限定超先行，不据此生成周六周播。"
+    },
+    {
+      "animeId": "bgm:625799", "kind": "network", "broadcast": "R/2026-10-06T15:30:00Z/P7D",
+      "platform": "ABEMA / dアニメストア", "regions": ["JP"], "sourceUrl": "https://sh-anime.shochiku.co.jp/chiifuyo-anime/onair",
+      "note": "官网：10月6日24:30日本时间见放题最速，其他网络10月9日24:30起；晚于电视30分钟。源U-NEXT10月2日错误。"
+    },
+    {
+      "animeId": "bgm:636023", "kind": "network", "broadcast": "R/2026-10-04T14:30:00Z/P7D",
+      "platform": "Prime Video", "regions": ["JP"], "sourceUrl": "https://www.tankchair-anime.com/onair.php",
+      "note": "官网：10月4日起每周日23:30日本时间见放题先行，晚于电视30分钟；其他网络10月7日起。源U-NEXT9月30日错误。"
+    },
+    {
+      "animeId": "bgm:654294", "kind": "network", "broadcast": "R/2026-10-08T16:58:00Z/P7D",
+      "platform": "dアニメストア / U-NEXT / アニメ放題", "regions": ["JP"], "sourceUrl": "https://hyouken-anime.com/",
+      "note": "官网：10月8日25:58日本时间放送直后先行配信，即周五01:58；晚于TBS30分钟，先于普通网络。源9月及2023旧记录不符本季。"
+    },
+    {
+      "animeId": "bgm:617948", "kind": "network", "broadcast": "R/2026-10-02T15:30:00Z/P7D",
+      "platform": "ABEMA / dアニメストア / U-NEXT / アニメ放題", "regions": ["JP"], "sourceUrl": "https://tougenanki-anime.com/",
+      "note": "官网：10月2日起每周五24:30日本时间先行配信，晚于电视一小时。源dAnime9月30日不符本季。"
+    },
+    {
+      "animeId": "bgm:624085", "kind": "network", "broadcast": "R/2026-10-06T12:55:00Z/P7D",
+      "platform": "ABEMA / dアニメストア", "regions": ["JP"], "sourceUrl": "https://kyoranreijo-pr.com/",
+      "note": "官网：10月6日起每周二21:55日本时间最速先行配信，晚于电视30分钟。采用官网VOD21:55；ABEMA直播22:00、U-NEXT周五后发是不同口径。"
+    },
+    {
+      "animeId": "bgm:621073", "kind": "network", "broadcast": "R/2026-10-11T14:30:00Z/P7D",
+      "platform": "dアニメストア / U-NEXT / アニメ放題", "regions": ["JP"], "sourceUrl": "https://zero-believers-anime.com/",
+      "note": "官网：10月11日起每周日23:30日本时间放送同时、见放题最速；与BS朝日同时，先于周一24:00的TOKYO MX。"
+    },
+    {
+      "animeId": "bgm:586941", "kind": "network", "broadcast": "R/2026-09-30T15:30:00Z/P7D",
+      "platform": "dアニメストア / U-NEXT / アニメタイムズ", "regions": ["JP"], "sourceUrl": "https://tenipuri.jp/u17/selection-match/onair.html",
+      "note": "官网先行配信：每周三深夜24:30日本时间，采用网络时刻。官网电视为24:00，原聚合放送01:30有差异，详情保留原来源仅供参考。"
+    },
+    {
+      "animeId": "bgm:621108", "kind": "broadcast", "sourceUrl": "https://hotaru-anime.com/onair/",
+      "note": "官网：10月9日电视23:30，网络同日24:00起顺次配信，无正片网络先行。源U-NEXT9月18日记录不符。"
+    },
+    {
+      "animeId": "bgm:637802", "kind": "broadcast", "sourceUrl": "https://ranma-pr.com/onair/",
+      "note": "本季官网：10月3日起电视每周六24:55，Netflix放送直后独占配信。源Netflix2024时间为旧季，不是本季先行。"
+    },
+    {
+      "animeId": "bgm:584847", "kind": "broadcast", "sourceUrl": "https://chiramune.com/onair/",
+      "note": "官网第2cour：ABEMA Premium/dAnime每周二24:30日本时间，与地上波同刻；U-NEXT每周五24:30后发。源U-NEXT10月9日不是正片先行。"
+    },
+    {
+      "animeId": "bgm:568244", "kind": "broadcast", "sourceUrl": "https://kusuriyanohitorigoto.jp/news/2623/",
+      "note": "官网第3季：电视结束后各平台顺次配信。源U-NEXT9月16日及Netflix10月1日的早日期不是已核实先行。"
+    },
+    {
+      "animeId": "bgm:568525", "kind": "broadcast", "sourceUrl": "https://the-vermilion-mask.com/onair/",
+      "note": "官网电视10月10日17:30起，网络仅见逃/顺次配信，未公告更早正片。源U-NEXT10月2日无先行依据。"
+    },
+    {
+      "animeId": "bgm:541538", "kind": "broadcast", "sourceUrl": "https://suikoden-anime.com/onair/",
+      "note": "首话10月3日周六20:00特别播出；第2话起10月13日每周二23:30，10月6日为特番。平台周六P7D误把首话特别时间当整季周期。"
+    },
+    {
+      "animeId": "bgm:434816", "kind": "broadcast", "sourceUrl": "https://nekokeibishitsu-anime.com/news/post-136/",
+      "note": "首批1至4话10月10日20:00上线，第5话起10月14日每周三23:30地上波同时配信。源平台周六周期误把首批上线当整季排期。"
+    },
+    {
+      "animeId": "bgm:688204", "kind": "broadcast", "sourceUrl": "https://yusanchi-anime.jp/",
+      "note": "官网电视周一/五11点左右，YouTube/FOD/TVer同日16点放送后配信，无先行。源U-NEXT9月26日错误；原TV周播源也未完整表达一周两播。"
+    }
+  ]
+}
