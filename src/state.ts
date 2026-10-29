@@ -2,6 +2,9 @@ import { computed, inject, onUnmounted, reactive, ref, type InjectionKey } from 
 import type { AnimeCredits, AnimeDetail, AppStatus, CatalogSnapshot, CharacterNames, Timezone } from '../shared/types';
 import { seasonFrom } from '../shared/schedule';
 import { exportBackup, FAVORITES_KEY, parseBackup, readFavorites, saveFavorites } from './favorites';
+import { useTheme } from './theme';
+import { useBrowseState } from './browse';
+import type { CatalogColumns, WeeklyLayout } from './presentation';
 
 const storage = { getItem: (key: string) => window.localStorage.getItem(key), setItem: (key: string, value: string) => window.localStorage.setItem(key, value) };
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
@@ -14,7 +17,11 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 export function createAppState() {
   const catalog = ref<CatalogSnapshot | null>(null), status = ref<AppStatus | null>(null), loading = ref(true);
   const notice = ref<{ text: string; kind: 'info' | 'error' } | null>(null);
+  const appearance = useTheme(text => notify(text));
+  const browse = useBrowseState(text => notify(text));
   const favorites = ref<string[]>([]), timezone = ref<Timezone>('Asia/Shanghai');
+  const weeklyLayout = ref<WeeklyLayout>('columns');
+  const catalogColumns = ref<CatalogColumns>(4);
   const details = reactive(new Map<string, AnimeDetail>()), detailLoading = reactive(new Set<string>()), detailErrors = reactive(new Map<string, string>());
   const pending = new Map<string, Promise<void>>();
   const credits = reactive(new Map<string, AnimeCredits>()), creditsLoading = reactive(new Set<string>()), creditsErrors = reactive(new Map<string, string>());
@@ -38,6 +45,17 @@ export function createAppState() {
     if (navigator.locks) await navigator.locks.request('anime-calendar:favorites', work); else work();
   }
   try { const saved = storage.getItem('anime-calendar:timezone'); if (saved === 'Asia/Tokyo') timezone.value = saved; } catch { /* 北京时间仍可使用，收藏操作另行报告存储失败。 */ }
+  try { if (storage.getItem('anime-calendar:weekly-layout') === 'rows') weeklyLayout.value = 'rows'; } catch { /* 可选显示偏好读取失败时使用竖列。 */ }
+  try { const saved = storage.getItem('anime-calendar:catalog-columns'); if (saved === '5' || saved === '6') catalogColumns.value = Number(saved) as CatalogColumns; } catch { /* 可选显示偏好读取失败时使用四列。 */ }
+
+  function setWeeklyLayout(value: WeeklyLayout) {
+    weeklyLayout.value = value;
+    try { storage.setItem('anime-calendar:weekly-layout', value); } catch { notify('布局已切换，但未保存。'); }
+  }
+  function setCatalogColumns(value: CatalogColumns) {
+    catalogColumns.value = value;
+    try { storage.setItem('anime-calendar:catalog-columns', String(value)); } catch { notify('列数已切换，但未保存。'); }
+  }
 
   function notify(text: string, kind: 'info' | 'error' = 'info') { notice.value = { text, kind }; }
   async function loadCatalog() {
@@ -136,7 +154,7 @@ export function createAppState() {
     const blob = new Blob([exportBackup(favorites.value, new Date().toISOString())], { type: 'application/json' });
     const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = `anime-calendar-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return { catalog, status, loading, notice, favorites, timezone, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
+  return { catalog, status, loading, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
 }
 export type AppState = ReturnType<typeof createAppState>;
 export const appKey: InjectionKey<AppState> = Symbol('anime-calendar');

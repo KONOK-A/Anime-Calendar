@@ -1,0 +1,44 @@
+/* Header preferences use the same native picker surface as the catalog filters. */
+.toolbar-controls{gap:8px}
+.toolbar-controls>label{position:relative;display:inline-flex;align-items:center;gap:0;flex-shrink:0;height:36px;padding:0;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--muted);transition:background-color .16s,border-color .16s}
+.toolbar-controls>label>svg{position:absolute;left:10px;width:16px;height:16px;pointer-events:none}
+.toolbar-controls>label:hover{background:var(--soft);border-color:color-mix(in srgb,var(--accent) 30%,var(--line))}
+.toolbar-controls>label:focus-within{border-color:var(--accent)}
+.toolbar-controls>label:has(select:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.toolbar-controls select{height:34px;min-height:0;min-width:0;max-width:none;padding:6px 10px 6px 34px;border:0;border-radius:8px;background:transparent;color:var(--ink);font-size:12px;line-height:1.4;white-space:nowrap}
+.toolbar-controls select:focus{outline:none}
+.toolbar-controls .timezone-control select{width:134px}
+.toolbar-controls .theme-control select{width:118px}
+@supports(appearance:base-select){
+  .toolbar-controls select,.toolbar-controls select::picker(select){appearance:base-select}
+  .toolbar-controls select{display:inline-flex;align-items:center;justify-content:space-between;gap:8px}
+  .toolbar-controls select::picker-icon{content:'';display:block;width:6px;height:6px;flex-shrink:0;margin-left:auto;margin-right:2px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .14s}
+  .toolbar-controls select:open::picker-icon{transform:translateY(2px) rotate(225deg)}
+  .toolbar-controls>label:has(select:open){border-color:var(--accent);background:var(--soft)}
+  .toolbar-controls select::picker(select){box-sizing:border-box;min-inline-size:184px;max-inline-size:calc(100vw - 24px);max-block-size:min(260px,calc(100dvh - 96px));padding:6px;margin-block-start:8px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 28px rgba(16,43,64,.16);overflow:auto;position-try-fallbacks:flip-block,flip-inline,flip-block flip-inline;opacity:0;transition:opacity .12s,display .12s allow-discrete,overlay .12s allow-discrete}
+  .toolbar-controls select:open::picker(select){opacity:1}
+  .toolbar-controls select:not(:open)::picker(select){pointer-events:none}
+  .toolbar-controls option{display:flex;align-items:center;gap:20px;min-block-size:40px;padding:9px 11px;border:0;border-radius:7px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:400;line-height:1.5;white-space:nowrap;cursor:pointer}
+  .toolbar-controls option:hover,.toolbar-controls option:focus{outline:none;background:var(--soft)}
+  .toolbar-controls option:checked{background:var(--soft);color:var(--accent);font-weight:600}
+  .toolbar-controls option::checkmark{order:1;margin-inline-start:auto;color:var(--accent);content:'✓';font-size:13px}
+  @starting-style{.toolbar-controls select:open::picker(select){opacity:0}}
+}
+@media(max-width:767px){
+  .toolbar-controls{gap:5px}
+  .toolbar-controls>label{height:38px;border-radius:8px}
+  .toolbar-controls select{height:36px;padding:6px 8px;font-size:11px}
+  .toolbar-controls .timezone-control>svg{display:none}
+  .toolbar-controls .timezone-control select{width:96px}
+  .toolbar-controls .theme-control select{width:93px;padding-left:28px}
+  .toolbar-controls .theme-control>svg{left:8px;width:15px;height:15px}
+}
+@media(max-width:359px){
+  .header-inner{gap:6px}
+  .toolbar-controls{gap:3px}
+  .toolbar-controls .timezone-control select{width:89px}
+  .toolbar-controls .theme-control select{width:76px;padding-left:8px}
+  .toolbar-controls .theme-control>svg{display:none}
+  .toolbar-controls .refresh-button{min-width:26px;padding:4px}
+}
+@media(prefers-reduced-motion:reduce){.toolbar-controls select::picker(select),.toolbar-controls select::picker-icon{transition:none!important}}

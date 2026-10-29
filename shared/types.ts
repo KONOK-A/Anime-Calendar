@@ -15,7 +15,8 @@ export interface CatalogSnapshot extends CatalogBase {
   schemaVersion: 1; activeIds: string[]; fetchedAt: { catalog: string | null; calendar: string | null }; overrides: Overrides;
 }
 export interface AiringEvent { animeId: string; at: string; basis: 'estimated' | 'source' | 'official'; status: 'scheduled' | 'cancelled'; sourceUrl: string; note?: string }
-export interface AnimeDetail extends Anime { summary: string; image: string | null; episodes: number | null; tags: string[]; staff: StaffCredit[]; detailFetchedAt: string | null; detailError: string | null }
+export interface AnimeRating { score: number; total: number; rank: number | null }
+export interface AnimeDetail extends Anime { summary: string; image: string | null; episodes: number | null; tags: string[]; staff: StaffCredit[]; rating: AnimeRating | null; detailFetchedAt: string | null; detailError: string | null }
 export interface SourceState { fetchedAt: string | null; error: string | null }
 export interface StaffCredit { role: string; names: string[] }
 export interface CastCredit { id: number; name: string; originalName?: string; relation: '主角' | '配角'; actors: { id: number; name: string }[] }

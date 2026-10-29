@@ -2,6 +2,8 @@
 
 项目使用 Vue 3 + TypeScript + Vite，Node.js 24 + Express 提供同源本地服务。依赖版本由 `package-lock.json` 固定。
 
+V2 视觉、主题/浏览偏好与验收说明见 [V2.md](V2.md)。主视觉由 `SceneBackdrop.vue` 和 `scene-visual.css` 绘制，不需要单独准备背景图片；已弃用的图片处理脚本仅在本机 `.local/` 归档。日常启动直接使用已构建产物。
+
 ## 目录
 
 | 目录 | 内容 |

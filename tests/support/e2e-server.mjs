@@ -13,6 +13,7 @@ const catalog = { siteMeta: { bangumi: { type: 'info' }, bilibili: { title: '哔
   item(4, '尚未定时的故事', '未定', '', '2026-10-30', 'web'),
   { ...item(5, '网络先行作品', '先行配信', 'R/2026-10-19T14:30:00Z/P7D', '2026-10-19T14:30:00Z'), sites: [{ site: 'bangumi', id: '5' }, { site: 'bilibili', id: '5', begin: '2026-10-17T12:00:00Z', broadcast: 'R/2026-10-17T12:00:00Z/P7D' }] },
 ] };
+for (let index = 0; index < 25; index++) catalog.items.push(item(1000 + index, `历史分页样本${index + 1}`, `ページ${index + 1}`, '', '2025-10-01T12:00:00Z'));
 catalog.siteMeta.gamer = { title: '動畫瘋', type: 'onair', urlTemplate: 'https://acg.gamer.com.tw/acgDetail.php?s={{id}}', regions: ['TW'] };
 catalog.siteMeta.gamer_hk = { title: '動畫瘋 HK', type: 'onair', urlTemplate: 'https://acg.gamer.com.tw/acgDetail.php?s={{id}}', regions: ['HK', 'MO'] };
 catalog.items[0].sites.push({ site: 'gamer', id: '12345' }, { site: 'gamer_hk', id: '12345' });
@@ -29,7 +30,7 @@ const service = new AnimeService({ directory, now: () => new Date('2026-10-29T04
   } else if (url.endsWith('/characters')) {
     const id = Number(url.split('/').at(-2));
     value = id === 1 ? Array.from({ length: 10 }, (_, index) => ({ id: index + 100, name: `原名${index}`, relation: index === 0 ? '主角' : '配角', actors: index === 7 ? [] : [{ id: index + 200, name: `声优${index}` }] })) : [];
-  } else if (url.includes('/subjects/')) { const id = Number(url.split('/').at(-1)); value = { id, name: `作品${id}`, name_cn: '', summary: '这是测试中的作品简介，用来验证详情、收藏和平台链接。' + (id === 1 ? '\r\n\r\n[简介原文]\r\nこれは折りたたむ原文です。' : ''), images: { large: 'http://127.0.0.1:4321/missing-cover.jpg' }, eps: 12, tags: [{ name: '青春' }, { name: '日常' }], infobox: id === 1 ? [{ key: '音乐', value: '音乐家丁' }] : [] }; }
+  } else if (url.includes('/subjects/')) { const id = Number(url.split('/').at(-1)); value = { id, name: `作品${id}`, name_cn: '', summary: '这是测试中的作品简介，用来验证详情、收藏和平台链接。' + (id === 1 ? '\r\n\r\n[简介原文]\r\nこれは折りたたむ原文です。' : ''), images: { large: 'http://127.0.0.1:4321/missing-cover.jpg' }, eps: 12, rating: id === 1 ? { score: 7.8, total: 1234, rank: 321 } : { score: 0, total: 0, rank: 0 }, tags: [{ name: '青春' }, { name: '日常' }], infobox: id === 1 ? [{ key: '音乐', value: '音乐家丁' }] : [] }; }
   else value = url.includes('/calendar') ? calendar : catalog;
   return new Response(JSON.stringify(value), { status: 200 });
 } });

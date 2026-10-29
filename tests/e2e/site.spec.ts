@@ -40,7 +40,7 @@ test('时区切换使深夜作品跨日移动，封面失败有占位且没有�
   await expect(page.getByRole('link', { name: '查看星旅详情' }).first()).toBeVisible();
   await expect(page.getByText('00:30', { exact: true }).first()).toBeVisible();
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', testInfo.project.name === 'mobile' ? 390 : 1440);
-  await expect(page.locator('img.poster').first()).toHaveAttribute('src', '/poster-placeholder.svg');
+  await expect(page.locator('.weekly-grid img.poster:visible').first()).toHaveAttribute('src', '/poster-placeholder.svg');
 });
 
 test('备份导入合并去重，无效备份不损坏收藏，允许移除失联ID', async ({ page }) => {
@@ -121,6 +121,8 @@ test('网络先行使用周六网络时段，详情同时显示所选平台与�
   await expect(page.locator('.detail-facts')).toContainText('哔哩哔哩');
   await expect(page.locator('.detail-facts')).toContainText('星期六 20:00');
   await expect(page.locator('.detail-facts')).toContainText('星期一 22:30');
+  await expect(page.locator('.detail-facts')).not.toContainText('预计');
+  await expect(page.locator('.detail-airing-summary')).not.toContainText('预计');
 });
 
 test('详情展示制作阵容与角色CV，原文默认折叠、切换作品后重新收起', async ({ page }) => {

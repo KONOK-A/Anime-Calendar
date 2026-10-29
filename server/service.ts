@@ -12,13 +12,16 @@ const CATALOG_URL = 'https://raw.githubusercontent.com/bangumi-data/bangumi-data
 const CALENDAR_URL = 'https://api.bgm.tv/calendar';
 const HOUR = 3_600_000;
 const emptyOverrides = (): Overrides => ({ version: 1, active: [], events: [], rules: [] });
-type Metadata = Pick<AnimeDetail, 'summary' | 'image' | 'episodes' | 'tags' | 'staff'>;
+type Metadata = Pick<AnimeDetail, 'summary' | 'image' | 'episodes' | 'tags' | 'staff' | 'rating'>;
 
 function metadata(input: unknown, id: number): Metadata {
   if (!isRecord(input) || input.id !== id || typeof input.name !== 'string') throw new Error('作品详情响应无效');
   const images = isRecord(input.images) ? input.images : {};
   const episodes = Number(input.eps) > 0 ? Number(input.eps) : Number(input.total_episodes) > 0 ? Number(input.total_episodes) : null;
-  return { summary: typeof input.summary === 'string' ? input.summary : '', image: safeUrl(images.large) ?? safeUrl(images.common) ?? safeUrl(images.medium), episodes, staff: infoboxStaff(input.infobox), tags: Array.isArray(input.tags) ? input.tags.filter(isRecord).map(x => x.name).filter((x): x is string => typeof x === 'string').slice(0, 12) : [] };
+  const sourceRating = isRecord(input.rating) ? input.rating : null;
+  const rating = sourceRating && typeof sourceRating.score === 'number' && Number.isFinite(sourceRating.score) && sourceRating.score > 0 && sourceRating.score <= 10 && typeof sourceRating.total === 'number' && Number.isSafeInteger(sourceRating.total) && sourceRating.total > 0
+    ? { score: sourceRating.score, total: sourceRating.total, rank: typeof sourceRating.rank === 'number' && Number.isSafeInteger(sourceRating.rank) && sourceRating.rank > 0 ? sourceRating.rank : null } : null;
+  return { summary: typeof input.summary === 'string' ? input.summary : '', image: safeUrl(images.large) ?? safeUrl(images.common) ?? safeUrl(images.medium), episodes, rating, staff: infoboxStaff(input.infobox), tags: Array.isArray(input.tags) ? input.tags.filter(isRecord).map(x => x.name).filter((x): x is string => typeof x === 'string').slice(0, 12) : [] };
 }
 
 function readOverrides(input: unknown): Overrides {
@@ -110,7 +113,7 @@ export class AnimeService {
   }
   private async loadDetail(id: string): Promise<AnimeDetail | null> {
     const anime = this.catalog()?.items.find(x => x.id === id); if (!anime) return null;
-    const fallback: AnimeDetail = { ...anime, summary: '', image: null, episodes: null, tags: [], staff: [], detailFetchedAt: null, detailError: null };
+    const fallback: AnimeDetail = { ...anime, summary: '', image: null, episodes: null, tags: [], staff: [], rating: null, detailFetchedAt: null, detailError: null };
     if (!anime.bangumiId) return { ...fallback, detailError: '缺少 Bangumi 关联，仍可查看基础信息。' };
     const key = `detail-${createHash('sha256').update(id).digest('hex').slice(0, 24)}`;
     const cached = await this.store.read(key, data => metadata(data, anime.bangumiId!));
