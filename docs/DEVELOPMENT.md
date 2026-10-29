@@ -46,6 +46,8 @@ npm run test:e2e
 
 ## Git
 
-仓库地址：<https://github.com/KONOK-A/Anime-Calendar>。`main` 保存可用版本，功能开发默认使用 `codex/` 前缀分支。
+仓库地址：<https://github.com/KONOK-A/Anime-Calendar>。`main` 保存已验收的可用版本；需要功能分支时统一使用 `dev/` 前缀，例如 `dev/search-sort`。
+
+创建、合并、删除分支或变更推送目标前，先说明分支名称、用途、合入目标和清理安排，得到用户确认后按批准的范围执行。提交与推送也按明确授权的范围进行；功能验收并合入 `main` 后再清理对应开发分支。
 
 提交包含源码、锁文件、测试、文档和必要静态资源；依赖、构建产物、缓存、临时日志、环境文件及测试报告由 `.gitignore` 排除。代码沿用仓库已有的 MIT License；第三方数据的署名见 [README](../README.md#来源)。
