@@ -6,7 +6,7 @@ V2 使用日期排版、放送刻度与几何色面构成主视觉，支持浅�
 
 本周番表支持竖列/横排切换；季度目录在宽屏可选择每行4、5、6部并记住偏好，窄屏自动调整。季度目录、追番和番表卡片显示有效Bangumi评分，详情提供评分人数及排名。更新后若旧启动窗口仍在运行，请关闭后重新双击 `start.cmd`，启用新的评分接口。
 
-[浅色首页](docs/screenshots/v2/desktop-light-weekly.png) · [深色首页](docs/screenshots/v2/desktop-dark-weekly.png) · [手机首页](docs/screenshots/v2/mobile-light-weekly.png) · [V2 使用、视觉设计与验收记录](docs/V2.md)
+[浅色首页](docs/screenshots/v2/desktop-light-weekly.png) · [深色首页](docs/screenshots/v2/desktop-dark-weekly.png) · [手机首页](docs/screenshots/v2/mobile-light-weekly.png) · [V2 功能说明](docs/V2.md)
 
 ## 从源码开始
 
@@ -92,7 +92,7 @@ npm run test:e2e
 
 浏览器测试使用本机 Chrome，测试服务仅在127.0.0.1:4321运行，使用独立临时目录与固定测试数据，不写入实际目录缓存或个人收藏。生产服务使用4317。修改源代码后重新构建再启动；`npm run dev`可运行Vite开发页面，API需要本地服务同时运行。
 
-Vue类型检查使用TypeScript6.0.3与vue-tsc，服务端单独执行tsc。依赖由package-lock.json锁定，不需要安装全局包。开发目录、验证命令与日志约定见 [开发说明](docs/DEVELOPMENT.md)。
+Vue类型检查使用TypeScript6.0.3与vue-tsc，服务端单独执行tsc。依赖由package-lock.json锁定，不需要安装全局包。
 
 ## 来源
 
