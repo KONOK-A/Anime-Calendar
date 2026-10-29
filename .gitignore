@@ -1,22 +1,30 @@
-# Installed dependencies and reproducible build output
+# Dependencies and build output
 node_modules/
 dist/
+*.tsbuildinfo
 
-# Runtime cache, local archives and development logs
+# Local runtime data, archives and logs
 .local/
 *.log
+*.log.*
 
-# Test reports and compiler caches
+# Test reports and coverage
 test-results/
 playwright-report/
 blob-report/
 coverage/
-*.tsbuildinfo
 
-# Local environment and operating-system files
+# Local environment; allow a shareable example
 .env
 .env.*
 !.env.example
+
+# Local agent configuration
+/AGENTS.md
+/.agents/
+/skills-lock.json
+
+# Operating-system metadata
 .DS_Store
 Thumbs.db
 Desktop.ini
