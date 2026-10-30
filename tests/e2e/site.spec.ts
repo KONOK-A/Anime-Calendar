@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { catalogViewFixture } from '../support/catalog-view-fixture';
 
 test.beforeEach(async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-29T04:00:00Z') });
@@ -33,7 +34,7 @@ test('季度别名搜索、类型过滤、待定作品与详情直达', async ({
 });
 
 test('时区切换使深夜作品跨日移动，封面失败有占位且没有横向溢出', async ({ page }, testInfo) => {
-  const missingImage = page.waitForResponse(response => response.url().endsWith('/missing-cover.jpg'));
+  const missingImage = page.waitForResponse(response => new URL(response.url()).pathname.startsWith('/media/posters/') && response.status() >= 400);
   await page.reload(); await missingImage;
   await page.getByRole('combobox', { name: '显示时区' }).selectOption('Asia/Tokyo');
   if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: '星期二', exact: false }).click();
@@ -101,7 +102,11 @@ test('详情首次连接失败会说明错误并允许就地重试', async ({ pa
 test('目录不可用时仍能查看收藏ID和导出备份', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bd:orphan'])));
   const status = await (await page.request.get('/api/status')).json();
-  await page.route('**/api/status', route => route.fulfill({ json: { ...status, hasCatalog: false, refreshing: false } }));
+  const snapshot = await (await page.request.get('/api/catalog')).json();
+  await page.route('**/api/catalog/items?*', route => {
+    const view = catalogViewFixture(route.request().url(), snapshot, { ...status, hasCatalog: false, refreshing: false });
+    return route.fulfill({ status: 503, json: { ...view, catalog: null, error: '目录暂不可用' } });
+  });
   await page.goto('/#/favorites'); await page.reload();
   await expect(page.getByText('bd:orphan', { exact: true })).toBeVisible();
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: '导出备份', exact: true }).click(); expect((await download).suggestedFilename()).toMatch(/anime-calendar/);

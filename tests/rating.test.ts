@@ -29,7 +29,8 @@ describe('Bangumi评分', () => {
     expect(await restarted.detail('bgm:1')).toMatchObject({ rating: { score: 7.8, total: 1234, rank: 321 } });
     expect(context.requests()).toBe(1);
     context.expire();
-    expect(await context.service.detail('bgm:1')).toMatchObject({ rating: { score: 7.8, total: 1234, rank: 321 }, detailError: expect.any(String) });
+    expect(await context.service.detail('bgm:1')).toMatchObject({ rating: { score: 7.8, total: 1234, rank: 321 }, revalidating: true });
+    expect(await context.service.detail('bgm:1', true)).toMatchObject({ rating: { score: 7.8, total: 1234, rank: 321 }, detailError: expect.any(String) });
   });
   it.each([undefined, { score: 0, total: 0 }, { score: 7.8, total: 0 }, { score: 11, total: 20 }, { score: -1, total: 20 }, { score: '7.8', total: 20 }, { score: 7.8, total: -1 }])('缺失、无投票或异常评分不伪装成有效分数：%j', async rating => {
     const { service } = await setup(rating);

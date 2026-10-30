@@ -104,7 +104,8 @@ describe('数据缓存与刷新', () => {
     await service.initialize(); await service.refresh(); expect((await service.detail('bgm:1'))?.summary).toBe('旅途简介');
     offline = true; expect((await service.detail('bgm:1'))?.detailError).toBeNull();
     time = new Date('2026-10-31T04:00:00Z');
-    expect(await service.detail('bgm:1')).toMatchObject({ summary: '旅途简介', detailError: expect.any(String) });
+    expect(await service.detail('bgm:1')).toMatchObject({ summary: '旅途简介', revalidating: true });
+    expect(await service.detail('bgm:1', true)).toMatchObject({ summary: '旅途简介', detailError: expect.any(String) });
     expect(service.catalog()?.items).toHaveLength(2);
   });
   it('所有上游请求共享两个并发名额', async () => {

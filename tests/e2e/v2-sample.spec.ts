@@ -1,3 +1,4 @@
+import { useCatalogFixture } from '../support/catalog-view-fixture';
 import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
@@ -169,7 +170,7 @@ test('V2：切换到页数相同的季度也会夹紧已保存的大页码', asy
   const snapshot = await (await page.request.get('/api/catalog')).json();
   const historical = snapshot.items.filter((item: { season: string }) => item.season === '2025-4');
   snapshot.items.push(...historical.map((item: object, index: number) => ({ ...item, id: `bgm:${2000 + index}`, season: '2024-4', begin: '2024-10-01T12:00:00Z' })));
-  await page.route('**/api/catalog', route => route.fulfill({ json: snapshot }));
+  await useCatalogFixture(page, snapshot);
   await page.addInitScript(() => sessionStorage.setItem('anime-calendar:browse:v1', JSON.stringify({ version: 1, seasons: { '2024-4': { query: '', type: '', page: 3 } } })));
   await page.goto('/#/season/2025/4'); await page.reload();
   await page.getByRole('combobox', { name: '年份' }).selectOption('2024');
@@ -181,7 +182,7 @@ test('V2：今日作品手动切换保持稳定且遵循收藏候选', async ({ 
   const snapshot = await (await page.request.get('/api/catalog')).json();
   snapshot.items.find((item: { id: string }) => item.id === 'bgm:1').rule.anchor = '2026-10-29T05:00:00Z';
   snapshot.items.find((item: { id: string }) => item.id === 'bgm:3').rule.anchor = '2026-10-29T06:00:00Z';
-  await page.route('**/api/catalog', route => route.fulfill({ json: snapshot }));
+  await useCatalogFixture(page, snapshot);
   await page.addInitScript(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bgm:2'])));
   await page.reload();
   const hero = page.getByRole('region', { name: '今日作品' });
@@ -218,7 +219,7 @@ test('V2：追番目录仍在读取时先显示加载状态', async ({ page }) =
   await expect(page.getByRole('heading', { name: '本周番表', exact: false })).toBeVisible();
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/api/catalog', async route => { await pending; await route.continue(); });
+  await page.route('**/api/catalog/**', async route => { await pending; await route.continue().catch(() => {}); });
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1'])));
   await page.goto('/#/favorites'); await page.reload();
   try {

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { clearAccelerationCache } from '../support/catalog-view-fixture';
 
 test.beforeEach(async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-29T04:00:00Z') });
@@ -105,6 +106,7 @@ test('季度、追番和番表卡片显示有效评分，无投票作品不显�
 });
 
 test('旧服务没有评分字段时明确告知重启，不伪装成无评分', async ({ page }) => {
+  await clearAccelerationCache(page);
   await page.route(/\/api\/anime\/bgm(?:%3A|:)1$/, async route => {
     const response = await route.fetch(), detail = await response.json();
     delete detail.rating;

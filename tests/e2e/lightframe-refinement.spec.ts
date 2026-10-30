@@ -1,3 +1,4 @@
+import { useCatalogFixture } from '../support/catalog-view-fixture';
 import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
@@ -30,7 +31,7 @@ test('主视觉精修：长短标题切换不重叠，时间和入口跟随新�
   const first = catalog.items.find((item: { id: string }) => item.id === 'bgm:1');
   first.rule.anchor = '2026-10-29T05:00:00Z';
   first.title = '用于检查长短作品标题切换的长标题'.repeat(5);
-  await page.route('**/api/catalog', route => route.fulfill({ json: catalog }));
+  await useCatalogFixture(page, catalog);
   await page.reload();
   const hero = page.getByRole('region', { name: '今日作品', exact: true });
   await expect(hero.getByRole('heading', { name: first.title, exact: true })).toBeVisible();
@@ -63,7 +64,7 @@ test('主视觉精修：省略的长标题可以直接打开完整作品标题',
   const first = catalog.items.find((item: { id: string }) => item.id === 'bgm:1');
   first.rule.anchor = '2026-10-29T05:00:00Z';
   first.title = '这是需要在作品详情完整查看的很长的动画标题'.repeat(5);
-  await page.route('**/api/catalog', route => route.fulfill({ json: catalog }));
+  await useCatalogFixture(page, catalog);
   await page.reload();
   const link = page.getByRole('region', { name: '今日作品', exact: true }).getByRole('link', { name: first.title, exact: true });
   await expect(link).toHaveAttribute('title', first.title);

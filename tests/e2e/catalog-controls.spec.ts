@@ -59,7 +59,7 @@ test('季度卡片可切换4、5、6列并记忆，不改变分页或追番页�
   await six.focus(); await page.keyboard.press('Enter');
   await expect.poll(columns).toBe(6);
   await expect(six).toHaveAttribute('aria-pressed', 'true');
-  expect((await grid.locator('.anime-card').first().boundingBox())!.width).toBeLessThan(originalWidth);
+  await expect.poll(async () => (await grid.locator('.anime-card').first().boundingBox())!.width).toBeLessThan(originalWidth);
   await expect(grid.locator('.anime-card')).toHaveCount(24);
   await page.getByRole('button', { name: '下一页' }).click();
   await page.reload();

@@ -6,13 +6,16 @@ import { CacheStore } from './cache.js';
 import { instant, isRecord, normalizeCalendar, normalizeCatalog, parseNetworkRule, parseRule, safeUrl } from './normalize.js';
 import { dateKey } from '../shared/schedule.js';
 import { infoboxStaff, mergeStaff, normalizeCast, normalizeCharacterName, normalizeStaff } from './credits.js';
+import { UpstreamClient } from './upstream.js';
+import { ResourceCache } from './resources.js';
+import { PosterError, PosterStore } from './posters.js';
 
-interface Options { directory: string; now?: () => Date; fetcher?: (url: string, init?: RequestInit) => Promise<Response>; overridesPath?: string }
+interface Options { directory: string; now?: () => Date; fetcher?: (url: string, init?: RequestInit) => Promise<Response>; overridesPath?: string; observe?: (event: Record<string, unknown>) => void }
 const CATALOG_URL = 'https://raw.githubusercontent.com/bangumi-data/bangumi-data/master/dist/data.json';
 const CALENDAR_URL = 'https://api.bgm.tv/calendar';
 const HOUR = 3_600_000;
 const emptyOverrides = (): Overrides => ({ version: 1, active: [], events: [], rules: [] });
-type Metadata = Pick<AnimeDetail, 'summary' | 'image' | 'episodes' | 'tags' | 'staff' | 'rating'>;
+type Metadata = Pick<AnimeDetail, 'summary' | 'image' | 'imageVariants' | 'episodes' | 'tags' | 'staff' | 'rating'>;
 
 function metadata(input: unknown, id: number): Metadata {
   if (!isRecord(input) || input.id !== id || typeof input.name !== 'string') throw new Error('作品详情响应无效');
@@ -21,7 +24,8 @@ function metadata(input: unknown, id: number): Metadata {
   const sourceRating = isRecord(input.rating) ? input.rating : null;
   const rating = sourceRating && typeof sourceRating.score === 'number' && Number.isFinite(sourceRating.score) && sourceRating.score > 0 && sourceRating.score <= 10 && typeof sourceRating.total === 'number' && Number.isSafeInteger(sourceRating.total) && sourceRating.total > 0
     ? { score: sourceRating.score, total: sourceRating.total, rank: typeof sourceRating.rank === 'number' && Number.isSafeInteger(sourceRating.rank) && sourceRating.rank > 0 ? sourceRating.rank : null } : null;
-  return { summary: typeof input.summary === 'string' ? input.summary : '', image: safeUrl(images.large) ?? safeUrl(images.common) ?? safeUrl(images.medium), episodes, rating, staff: infoboxStaff(input.infobox), tags: Array.isArray(input.tags) ? input.tags.filter(isRecord).map(x => x.name).filter((x): x is string => typeof x === 'string').slice(0, 12) : [] };
+  const image = safeUrl(images.large) ?? safeUrl(images.common) ?? safeUrl(images.medium);
+  return { summary: typeof input.summary === 'string' ? input.summary : '', image, imageVariants: { thumb: safeUrl(images.small) ?? safeUrl(images.common) ?? image, card: safeUrl(images.common) ?? safeUrl(images.medium) ?? image, hero: safeUrl(images.medium) ?? image }, episodes, rating, staff: infoboxStaff(input.infobox), tags: Array.isArray(input.tags) ? input.tags.filter(isRecord).map(x => x.name).filter((x): x is string => typeof x === 'string').slice(0, 12) : [] };
 }
 
 function readOverrides(input: unknown): Overrides {
@@ -41,36 +45,57 @@ function readOverrides(input: unknown): Overrides {
 export class AnimeService {
   private readonly store: CacheStore;
   private readonly now: () => Date;
-  private readonly fetcher: NonNullable<Options['fetcher']>;
+  readonly upstream: UpstreamClient;
+  private readonly resources: ResourceCache;
+  readonly posters: PosterStore;
   private base: CatalogBase | null = null;
   private activeIds: string[] = [];
   private overrides = emptyOverrides();
-  private readonly issues: string[] = [];
+  private readonly issues = new Map<string, string>();
   private readonly sources: AppStatus['sources'] = { catalog: { fetchedAt: null, error: null }, calendar: { fetchedAt: null, error: null } };
   private refreshPromise: Promise<void> | null = null;
+  private maintenancePromise: Promise<void> | null = null;
   private readonly details = new Map<string, Promise<AnimeDetail | null>>();
   private readonly creditRequests = new Map<string, Promise<AnimeCredits | null>>();
-  private readonly nameRequests = new Map<number, Promise<{ data: CharacterName | null; error: string | null }>>();
-  private permits = 0;
-  private readonly waiting: (() => void)[] = [];
+  private readonly characterRequests = new Map<string, Promise<CharacterNames | null>>();
+  private snapshot: CatalogSnapshot | null = null;
+  private readonly byId = new Map<string, Anime>();
+  private nextBoundary = Infinity;
+  private snapshotAt = -Infinity;
+  private statusVersion = 0;
+  private readonly sourceRaw = new Map<string, unknown>();
+  private readonly validators = new Map<string, { etag?: string; lastModified?: string }>();
+  private readonly retries = new Map<string, { at: number; failures: number }>();
 
   constructor(private readonly options: Options) {
-    this.store = new CacheStore(options.directory); this.now = options.now ?? (() => new Date()); this.fetcher = options.fetcher ?? fetch;
+    this.store = new CacheStore(options.directory); this.now = options.now ?? (() => new Date()); this.upstream = new UpstreamClient(options.fetcher, options.observe);
+    this.resources = new ResourceCache(this.store, this.upstream, this.now);
+    this.posters = new PosterStore(join(options.directory, 'media'), this.upstream, async (id, size) => {
+      if (!this.catalog()) throw new PosterError('目录正在初始化。', 503);
+      if (!this.item(id)) throw new PosterError('当前目录未收录该作品。', 404);
+      const detail = await this.detail(id);
+      return detail?.imageVariants?.[size] ?? detail?.image ?? null;
+    });
   }
   async initialize(): Promise<void> {
     const [catalog, calendar] = await Promise.all([this.store.read('catalog', normalizeCatalog), this.store.read('calendar', normalizeCalendar)]);
     if (catalog) { this.base = catalog.data; this.sources.catalog.fetchedAt = catalog.fetchedAt; }
     if (calendar) { this.activeIds = calendar.data; this.sources.calendar.fetchedAt = calendar.fetchedAt; }
+    for (const [key, value] of [['catalog', catalog], ['calendar', calendar]] as const) if (value) { this.sourceRaw.set(key, value.raw); if (value.validators) this.validators.set(key, value.validators); }
     try { this.overrides = readOverrides(JSON.parse(await readFile(this.options.overridesPath ?? join(dirname(this.options.directory), 'data', 'overrides.json'), 'utf8'))); }
-    catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) this.issues.push(`人工修正未加载：${error instanceof Error ? error.message : '未知错误'}`); }
+    catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) this.issues.set('overrides', `人工修正未加载：${error instanceof Error ? error.message : '未知错误'}`); }
+    await this.store.maintain().catch(() => this.issues.set('cache-maintenance', '缓存容量整理暂未完成，已有资料仍可使用。'));
   }
-  status(): AppStatus {
-    return { appId: 'anime-calendar', version: '1.0.0', refreshing: this.refreshPromise !== null, hasCatalog: this.base !== null, sources: structuredClone(this.sources), warnings: [...new Set([...this.issues, ...this.store.warnings, ...(this.catalog()?.warnings ?? [])])] };
+  status(catalog: CatalogSnapshot | null = this.catalog()): AppStatus {
+    return { appId: 'anime-calendar', version: '1.0.0', refreshing: this.refreshPromise !== null, hasCatalog: this.base !== null, sources: structuredClone(this.sources), warnings: [...new Set([...this.issues.values(), ...this.store.warnings, ...this.posters.warnings, ...(catalog?.warnings ?? [])])] };
   }
   catalog(): CatalogSnapshot | null {
     if (!this.base) return null;
-    const items = this.base.items.map(anime => {
-      const override = this.overrides.rules?.find(x => x.animeId === anime.id);
+    const at = this.now().getTime();
+    if (this.snapshot && at >= this.snapshotAt && at < this.nextBoundary) return this.snapshot;
+    const rules = new Map(this.overrides.rules?.map(rule => [rule.animeId, rule]));
+    const items = this.snapshot?.items ?? this.base.items.map(anime => {
+      const override = rules.get(anime.id);
       if (!override) return anime;
       const item: Anime = { ...anime, rule: { ...anime.rule }, broadcastRule: { ...anime.broadcastRule }, scheduleNote: override.note, scheduleSource: override.sourceUrl };
       if (override.kind === 'broadcast') { item.rule = { ...item.broadcastRule }; delete item.networkAiring; }
@@ -85,103 +110,103 @@ export class AnimeService {
       return item;
     });
     const warnings = [...this.base.warnings];
-    for (const item of items) if (this.activeIds.includes(item.id) && item.rule.end && Date.parse(item.rule.end) < this.now().getTime()) warnings.push(`来源冲突：${item.title}（${item.id}）仍在放送名单中，但已有结束日期；不继续展开周期。`);
-    return { schemaVersion: 1, items, warnings, activeIds: this.activeIds, overrides: this.overrides, fetchedAt: { catalog: this.sources.catalog.fetchedAt, calendar: this.sources.calendar.fetchedAt } };
+    const active = new Set(this.activeIds); this.nextBoundary = Infinity;
+    for (const item of items) {
+      if (item.rule.end) { const end = Date.parse(item.rule.end); if (end >= at) this.nextBoundary = Math.min(this.nextBoundary, end + 1); if (active.has(item.id) && end < at) warnings.push(`来源冲突：${item.title}（${item.id}）仍在放送名单中，但已有结束日期；不继续展开周期。`); }
+    }
+    this.snapshotAt = at;
+    this.byId.clear(); for (const item of items) this.byId.set(item.id, item);
+    return this.snapshot = { schemaVersion: 1, items, warnings, activeIds: this.activeIds, overrides: this.overrides, fetchedAt: { catalog: this.sources.catalog.fetchedAt, calendar: this.sources.calendar.fetchedAt } };
   }
-  refresh(): Promise<void> {
+  item(id: string): Anime | undefined { this.catalog(); return this.byId.get(id); }
+  epoch(): string { this.catalog(); return `${this.statusVersion}:${this.store.revision}:${this.posters.revision}:${this.snapshotAt}`; }
+  async drain(): Promise<void> {
+    do {
+      await Promise.allSettled([this.refreshPromise, this.maintenancePromise, ...this.details.values(), ...this.creditRequests.values(), ...this.characterRequests.values(), this.resources.drain(), this.posters.drain()]);
+      await this.resources.drain(); await this.store.drain(); await this.upstream.idle();
+    } while (this.refreshPromise || this.maintenancePromise || this.details.size || this.creditRequests.size || this.characterRequests.size);
+  }
+  close(): void { this.upstream.close(); }
+  refresh(mode: 'all' | 'stale' = 'all'): Promise<void> {
     if (this.refreshPromise) return this.refreshPromise;
-    this.refreshPromise = this.performRefresh().finally(() => { this.refreshPromise = null; });
+    this.statusVersion++;
+    this.refreshPromise = this.performRefresh(mode).finally(() => { this.refreshPromise = null; this.statusVersion++; });
     return this.refreshPromise;
   }
-  private async performRefresh(): Promise<void> {
-    await Promise.all((['catalog', 'calendar'] as const).map(async source => {
+  private async performRefresh(mode: 'all' | 'stale'): Promise<void> {
+    const started = Date.now(), selected = (['catalog', 'calendar'] as const).filter(source => mode === 'all' || this.sourceIsDue(source));
+    await Promise.all(selected.map(async source => {
       try {
-        const raw = await this.request(source === 'catalog' ? CATALOG_URL : CALENDAR_URL);
+        const previous = this.validators.get(source), headers: Record<string, string> = {};
+        if (previous?.etag) headers['if-none-match'] = previous.etag;
+        if (previous?.lastModified) headers['if-modified-since'] = previous.lastModified;
+        const response = await this.upstream.request(source === 'catalog' ? CATALOG_URL : CALENDAR_URL, { timeoutMs: 60_000, maxBytes: source === 'catalog' ? 16 * 1024 * 1024 : 4 * 1024 * 1024, background: mode === 'stale', headers });
+        const raw = response.status === 304 ? this.sourceRaw.get(source) : JSON.parse(response.bytes.toString('utf8')) as unknown;
         const normalized = source === 'catalog' ? normalizeCatalog(raw) : normalizeCalendar(raw);
-        const at = this.now().toISOString(); await this.store.write(source, raw, at);
+        const at = this.now().toISOString(), validators = { etag: response.headers.get('etag') ?? previous?.etag, lastModified: response.headers.get('last-modified') ?? previous?.lastModified };
+        try { await this.store.write(source, raw, at, validators); this.issues.delete(`source-${source}`); } catch { this.issues.set(`source-${source}`, `来源 ${source} 已更新，但缓存未保存。`); }
         if (source === 'catalog') this.base = normalized as CatalogBase; else this.activeIds = normalized as string[];
+        this.sourceRaw.set(source, raw); this.validators.set(source, validators); this.retries.delete(source);
         this.sources[source] = { fetchedAt: at, error: null };
-      } catch (error) { this.sources[source].error = error instanceof Error ? error.message : '获取失败'; }
+        this.snapshot = null; this.statusVersion++;
+      } catch (error) {
+        this.sources[source].error = error instanceof Error ? error.message : '获取失败';
+        const failures = (this.retries.get(source)?.failures ?? 0) + 1;
+        this.retries.set(source, { at: this.now().getTime() + Math.min(60, 15 * 2 ** (failures - 1)) * 60_000, failures }); this.statusVersion++;
+      }
     }));
+    this.options.observe?.({ event: 'refresh', mode, durationMs: Date.now() - started, results: selected.map(source => ({ source, ok: !this.sources[source].error, fetchedAt: this.sources[source].fetchedAt })) });
   }
+  private sourceIsDue(source: 'catalog' | 'calendar') { const value = this.sources[source]; return (!value.fetchedAt || this.now().getTime() - Date.parse(value.fetchedAt) >= 6 * HOUR) && (this.retries.get(source)?.at ?? 0) <= this.now().getTime(); }
   needsRefresh(): boolean {
-    return Object.values(this.sources).some(source => !source.fetchedAt || this.now().getTime() - Date.parse(source.fetchedAt) >= 6 * HOUR);
+    return (['catalog', 'calendar'] as const).some(source => this.sourceIsDue(source));
   }
-  detail(id: string): Promise<AnimeDetail | null> {
-    const pending = this.details.get(id); if (pending) return pending;
-    const task = this.loadDetail(id).finally(() => this.details.delete(id)); this.details.set(id, task); return task;
+  detail(id: string, wait = false): Promise<AnimeDetail | null> {
+    const key = `${id}:${wait}`, pending = this.details.get(key); if (pending) return pending;
+    const task = this.loadDetail(id, wait).finally(() => this.details.delete(key)); this.details.set(key, task); return task;
   }
-  private async loadDetail(id: string): Promise<AnimeDetail | null> {
-    const anime = this.catalog()?.items.find(x => x.id === id); if (!anime) return null;
+  private async loadDetail(id: string, wait: boolean): Promise<AnimeDetail | null> {
+    const anime = this.item(id); if (!anime) return null;
     const fallback: AnimeDetail = { ...anime, summary: '', image: null, episodes: null, tags: [], staff: [], rating: null, detailFetchedAt: null, detailError: null };
     if (!anime.bangumiId) return { ...fallback, detailError: '缺少 Bangumi 关联，仍可查看基础信息。' };
     const key = `detail-${createHash('sha256').update(id).digest('hex').slice(0, 24)}`;
-    const cached = await this.store.read(key, data => metadata(data, anime.bangumiId!));
-    if (cached && this.now().getTime() - Date.parse(cached.fetchedAt) < 24 * HOUR) return { ...fallback, ...cached.data, detailFetchedAt: cached.fetchedAt };
-    try {
-      const raw = await this.request(`https://api.bgm.tv/v0/subjects/${anime.bangumiId}`), data = metadata(raw, anime.bangumiId), at = this.now().toISOString();
-      await this.store.write(key, raw, at); return { ...fallback, ...data, detailFetchedAt: at };
-    } catch (error) {
-      return { ...fallback, ...(cached?.data ?? {}), detailFetchedAt: cached?.fetchedAt ?? null, detailError: `详情获取失败：${error instanceof Error ? error.message : '未知错误'}。可稍后重试。` };
-    }
+    const result = await this.resources.get(key, `https://api.bgm.tv/v0/subjects/${anime.bangumiId}`, raw => metadata(raw, anime.bangumiId!), wait);
+    return { ...fallback, ...(result.data ?? {}), detailFetchedAt: result.fetchedAt, detailError: result.error, ...(result.revalidating ? { revalidating: true } : {}) };
   }
-  credits(id: string): Promise<AnimeCredits | null> {
-    const pending = this.creditRequests.get(id); if (pending) return pending;
-    const task = this.loadCredits(id).finally(() => this.creditRequests.delete(id)); this.creditRequests.set(id, task); return task;
+  credits(id: string, wait = false): Promise<AnimeCredits | null> {
+    const key = `${id}:${wait}`, pending = this.creditRequests.get(key); if (pending) return pending;
+    const task = this.loadCredits(id, wait).finally(() => this.creditRequests.delete(key)); this.creditRequests.set(key, task); return task;
   }
-  private async loadCredits(id: string): Promise<AnimeCredits | null> {
-    const anime = this.catalog()?.items.find(item => item.id === id); if (!anime) return null;
+  private async loadCredits(id: string, wait: boolean): Promise<AnimeCredits | null> {
+    const anime = this.item(id); if (!anime) return null;
     if (!anime.bangumiId) {
       const source = { fetchedAt: null, error: '缺少 Bangumi 关联，暂时无法获取制作与配音资料。' };
       return { staff: [], cast: [], sources: { staff: source, cast: source } };
     }
-    const [detail, staff, cast] = await Promise.all([
-      this.detail(id),
-      this.creditSource(anime.bangumiId, 'persons', normalizeStaff),
-      this.creditSource(anime.bangumiId, 'characters', normalizeCast),
-    ]);
-    return { staff: mergeStaff(staff.data, detail?.staff ?? []), cast: cast.data, sources: { staff: staff.source, cast: cast.source } };
+    const [detail, staff, cast] = await Promise.all([this.detail(id, wait), this.creditSource(anime.bangumiId, 'persons', normalizeStaff, wait), this.creditSource(anime.bangumiId, 'characters', normalizeCast, wait)]);
+    return { staff: mergeStaff(staff.data, detail?.staff ?? []), cast: cast.data, sources: { staff: staff.source, cast: cast.source }, ...(detail?.revalidating || staff.source.revalidating || cast.source.revalidating ? { revalidating: true } : {}) };
   }
-  private async creditSource<T>(id: number, kind: 'persons' | 'characters', normalize: (value: unknown) => T[]): Promise<{ data: T[]; source: { fetchedAt: string | null; error: string | null } }> {
-    const key = `credits-${kind}-${id}`, cached = await this.store.read(key, normalize);
-    if (cached && this.now().getTime() - Date.parse(cached.fetchedAt) < 24 * HOUR) return { data: cached.data, source: { fetchedAt: cached.fetchedAt, error: null } };
-    try {
-      const raw = await this.request(`https://api.bgm.tv/v0/subjects/${id}/${kind}`), data = normalize(raw), at = this.now().toISOString();
-      await this.store.write(key, raw, at); return { data, source: { fetchedAt: at, error: null } };
-    } catch (error) { return { data: cached?.data ?? [], source: { fetchedAt: cached?.fetchedAt ?? null, error: `${kind === 'persons' ? '制作资料' : '角色配音'}获取失败：${error instanceof Error ? error.message : '未知错误'}。可稍后重试。` } }; }
+  private async creditSource<T>(id: number, kind: 'persons' | 'characters', normalize: (value: unknown) => T[], wait = false): Promise<{ data: T[]; source: { fetchedAt: string | null; error: string | null; revalidating?: boolean } }> {
+    const result = await this.resources.get(`credits-${kind}-${id}`, `https://api.bgm.tv/v0/subjects/${id}/${kind}`, normalize, wait);
+    return { data: result.data ?? [], source: { fetchedAt: result.fetchedAt, error: result.error, ...(result.revalidating ? { revalidating: true } : {}) } };
   }
-  async characterNames(id: string, offset = 0): Promise<CharacterNames | null> {
-    const anime = this.catalog()?.items.find(item => item.id === id); if (!anime) return null;
+  characterNames(id: string, offset = 0, wait = false): Promise<CharacterNames | null> {
+    const key = `${id}:${offset}:${wait}`, existing = this.characterRequests.get(key); if (existing) return existing;
+    const task = this.loadCharacterNames(id, offset, wait).finally(() => this.characterRequests.delete(key)); this.characterRequests.set(key, task); return task;
+  }
+  private async loadCharacterNames(id: string, offset: number, wait: boolean): Promise<CharacterNames | null> {
+    const anime = this.item(id); if (!anime) return null;
     if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('角色分页位置无效');
     if (!anime.bangumiId) return { names: [], error: '缺少关联，无法补充中文角色名。' };
-    const cast = await this.creditSource(anime.bangumiId, 'characters', normalizeCast);
-    const visible = cast.data.slice(offset, offset + 8);
-    const results = await Promise.all(visible.map(character => this.characterName(character.id)));
-    return { names: results.map((result, index) => result.data ?? { id: visible[index].id, name: visible[index].name, originalName: visible[index].name }), error: cast.source.error || (results.some(result => result.error) ? '部分中文角色名未能获取，已保留缓存或原名，可重试。' : null) };
+    const cast = await this.creditSource(anime.bangumiId, 'characters', normalizeCast, wait), visible = cast.data.slice(offset, offset + 8);
+    const results = await Promise.all(visible.map(character => this.resources.get(`character-name-${character.id}`, `https://api.bgm.tv/v0/characters/${character.id}`, raw => normalizeCharacterName(raw, character.id), wait)));
+    return { names: results.map((result, index) => result.data ?? { id: visible[index].id, name: visible[index].name, originalName: visible[index].name }), error: cast.source.error || (results.some(result => result.error) ? '部分中文角色名未能获取，已保留缓存或原名，可重试。' : null), ...(cast.source.revalidating || results.some(result => result.revalidating) ? { revalidating: true } : {}) };
   }
-  private characterName(id: number): Promise<{ data: CharacterName | null; error: string | null }> {
-    const pending = this.nameRequests.get(id); if (pending) return pending;
-    const task = this.loadCharacterName(id).finally(() => this.nameRequests.delete(id)); this.nameRequests.set(id, task); return task;
-  }
-  private async loadCharacterName(id: number): Promise<{ data: CharacterName | null; error: string | null }> {
-    const key = `character-name-${id}`, cached = await this.store.read(key, value => normalizeCharacterName(value, id));
-    if (cached && this.now().getTime() - Date.parse(cached.fetchedAt) < 24 * HOUR) return { data: cached.data, error: null };
-    try {
-      const raw = await this.request(`https://api.bgm.tv/v0/characters/${id}`), data = normalizeCharacterName(raw, id);
-      await this.store.write(key, raw, this.now().toISOString()); return { data, error: null };
-    } catch (error) { return { data: cached?.data ?? null, error: error instanceof Error ? error.message : '角色名获取失败' }; }
-  }
-  private async request(url: string): Promise<unknown> {
-    if (this.permits < 2) this.permits++; else await new Promise<void>(resolve => this.waiting.push(resolve));
-    try {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const response = await this.fetcher(url, { headers: { accept: 'application/json', 'user-agent': 'Kano/anime-calendar/1.0.0 (local personal calendar)' }, signal: AbortSignal.timeout(45_000) });
-        if (response.ok) return await response.json();
-        await response.body?.cancel();
-        if (attempt === 0 && [429, 503].includes(response.status)) { await new Promise(resolve => setTimeout(resolve, Math.min(3, Number(response.headers.get('retry-after')) || 1) * 1000)); continue; }
-        throw new Error(`上游返回 HTTP ${response.status}`);
-      }
-      throw new Error('请求未完成');
-    } finally { const next = this.waiting.shift(); if (next) next(); else this.permits--; }
+  private maintenanceAt = 0;
+  maintain(): Promise<void> {
+    if (this.maintenancePromise) return this.maintenancePromise;
+    if (Date.now() - this.maintenanceAt < 3_600_000) return Promise.resolve();
+    this.maintenanceAt = Date.now();
+    return this.maintenancePromise = Promise.all([this.store.maintain(), this.posters.maintain()]).then(() => { this.issues.delete('cache-maintenance'); }).finally(() => { this.maintenancePromise = null; });
   }
 }

@@ -1,3 +1,4 @@
+import { useCatalogFixture } from '../support/catalog-view-fixture';
 import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
@@ -21,7 +22,7 @@ test('光帧：静止首页突出海报，手机首屏可见排期且操作不�
 test('光帧：主视觉切换时海报与文字共同运动，快速操作仍对应当前作品', async ({ page }) => {
   const catalog = await (await page.request.get('/api/catalog')).json();
   catalog.items.find((item: { id: string }) => item.id === 'bgm:1').rule.anchor = '2026-10-29T05:00:00Z';
-  await page.route('**/api/catalog', route => route.fulfill({ json: catalog }));
+  await useCatalogFixture(page, catalog);
   await page.reload();
   const hero = page.getByRole('region', { name: '今日作品', exact: true });
   await expect(hero.getByRole('heading', { name: '星旅', exact: true })).toBeVisible();
@@ -96,7 +97,7 @@ test('光帧：深浅主题保持整页可见，装饰透明度不影响文档',
 test('光帧：离场封面延迟失败不会清除当前作品背景', async ({ page }) => {
   const catalog = await (await page.request.get('/api/catalog')).json();
   catalog.items.find((item: { id: string }) => item.id === 'bgm:1').rule.anchor = '2026-10-29T05:00:00Z';
-  await page.route('**/api/catalog', route => route.fulfill({ json: catalog }));
+  await useCatalogFixture(page, catalog);
   await page.route(/\/api\/anime\/bgm(?:%3A|:)\d+$/, async route => {
     const response = await route.fetch();
     const detail = await response.json();
@@ -129,7 +130,7 @@ test('光帧：目录初始化时背景装饰保持稳定，避免首屏布局�
   });
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/api/catalog', async route => { await pending; await route.fulfill({ json: catalog }); });
+  await useCatalogFixture(page, catalog, () => pending);
   await page.reload({ waitUntil: 'domcontentloaded' });
   try {
     await expect(page.getByRole('heading', { name: '正在准备你的番表', exact: true })).toBeVisible();

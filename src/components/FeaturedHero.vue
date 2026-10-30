@@ -6,6 +6,7 @@ import { useAppState } from '../state';
 import { animateSaved, useMotionScope, usePointerLight } from '../motion';
 import SceneBackdrop from './SceneBackdrop.vue';
 import Poster from './Poster.vue';
+import { posterSource } from '../poster-source';
 import Icon from './Icon.vue';
 
 const state = useAppState(), selected = ref(''), element = ref<HTMLElement>(), saveButton = ref<HTMLElement>();
@@ -49,7 +50,7 @@ const titleDuration = computed(() => state.appearance.reducedMotion.value ? 0 : 
 </script>
 <template>
   <section ref="element" class="featured-hero frame-hero" :class="{ 'is-empty': !anime }" :data-motion="active ? 'running' : 'paused'" :data-direction="direction" aria-label="今日作品" @pointermove="pointer.move" @pointerleave="pointer.reset">
-    <div class="frame-wash-window" aria-hidden="true"><Transition name="frame-wash" :duration="transitionDuration" @before-leave="leave" @before-enter="enter"><div v-if="anime" :key="anime.id" class="frame-wash"><img v-if="detail?.image && !imageFailed" :src="detail.image" :data-anime-id="anime.id" alt="" @error="washImageFailed" /></div></Transition></div>
+    <div class="frame-wash-window" aria-hidden="true"><Transition name="frame-wash" :duration="transitionDuration" @before-leave="leave" @before-enter="enter"><div v-if="anime" :key="anime.id" class="frame-wash"><img v-if="detail?.image && !imageFailed" :src="posterSource(anime.id, 'card', detail.image, detail.detailFetchedAt) ?? undefined" :data-anime-id="anime.id" alt="" @error="washImageFailed" /></div></Transition></div>
     <div class="frame-copy">
       <p class="frame-eyebrow"><span class="frame-airing-mark" /><span>今日放送</span><i />{{ date }}</p>
       <div class="frame-title-stage">
@@ -63,7 +64,7 @@ const titleDuration = computed(() => state.appearance.reducedMotion.value ? 0 : 
     </div>
     <div class="frame-visual-stage">
       <SceneBackdrop animate />
-      <div class="frame-poster-stage"><Transition name="frame-poster" appear :duration="transitionDuration" @before-leave="leave" @before-enter="enter"><a v-if="anime" :key="anime.id" class="hero-poster" :href="`#/anime/${anime.id}`" :aria-label="`打开${anime.title}作品页`"><div class="frame-poster-image"><Poster :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" priority /><span class="frame-image-sheen" /></div><span class="frame-poster-caption"><span>{{ anime.type.toUpperCase() }}</span><span v-if="saved">已追番</span></span></a></Transition></div>
+      <div class="frame-poster-stage"><Transition name="frame-poster" appear :duration="transitionDuration" @before-leave="leave" @before-enter="enter"><a v-if="anime" :key="anime.id" class="hero-poster" :href="`#/anime/${anime.id}`" :aria-label="`打开${anime.title}作品页`"><div class="frame-poster-image"><Poster :id="anime.id" :revision="detail?.detailFetchedAt" size="hero" :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" priority /><span class="frame-image-sheen" /></div><span class="frame-poster-caption"><span>{{ anime.type.toUpperCase() }}</span><span v-if="saved">已追番</span></span></a></Transition></div>
       <div v-if="candidates.length > 1" class="hero-pagination" role="group" :aria-label="`切换今日作品：第${index + 1}部，共${candidates.length}部`"><button aria-label="上一部今日作品" @click="change(-1)"><Icon name="back" :size="16" /></button><span class="hero-slide-track" aria-hidden="true" :style="{ '--hero-slide': (index + 1) / candidates.length }" /><button aria-label="下一部今日作品" @click="change(1)"><Icon name="chevron" :size="16" /></button></div>
     </div>
     <span class="frame-edge-light" aria-hidden="true" />

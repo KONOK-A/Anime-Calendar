@@ -1,3 +1,4 @@
+import { useCatalogFixture } from '../support/catalog-view-fixture';
 import { test, expect } from '@playwright/test';
 
 test('短简介和较多平台信息不会把制作阵容推到大片留白下方', async ({ page }, testInfo) => {
@@ -8,7 +9,7 @@ test('短简介和较多平台信息不会把制作阵容推到大片留白下�
     name: `测试平台${index + 1}`, url: `https://example.com/watch/${index + 1}`,
     regions: index === 6 ? Array.from({ length: 40 }, (_, region) => `R${String(region + 1).padStart(2, '0')}`) : ['JP'],
   }));
-  await page.route('**/api/catalog', route => route.fulfill({ json: snapshot }));
+  await useCatalogFixture(page, snapshot);
   await page.goto('/#/anime/bgm:1');
   await expect(page.getByText('导演甲', { exact: true })).toBeVisible();
   await expect(page.getByText('主角甲', { exact: true })).toBeVisible();

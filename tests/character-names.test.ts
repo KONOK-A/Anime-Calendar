@@ -34,7 +34,8 @@ describe('角色中文名', () => {
     const more = await service.characterNames('bgm:1', 8); expect(more?.names).toHaveLength(2); expect(requests).toHaveLength(10);
     expect((await service.credits('bgm:1'))?.cast[0].actors[0]).toEqual({ id: 100, name: '声优0' });
     time = new Date('2026-10-31T04:00:00Z'); offline = true;
-    const stale = await service.characterNames('bgm:1'); expect(stale?.names[0].name).toBe('中文角色10'); expect(stale?.error).toBeTruthy();
+    const cached = await service.characterNames('bgm:1'); expect(cached?.names[0].name).toBe('中文角色10'); expect(cached?.revalidating).toBe(true);
+    const stale = await service.characterNames('bgm:1', 0, true); expect(stale?.names[0].name).toBe('中文角色10'); expect(stale?.error).toBeTruthy();
     expect(await service.characterNames('bgm:999')).toBeNull();
   });
 });

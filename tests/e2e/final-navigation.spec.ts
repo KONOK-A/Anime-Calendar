@@ -1,5 +1,6 @@
 import { test, expect, type CDPSession, type Locator, type Page } from '@playwright/test';
 import type { Anime, AnimeDetail, AppStatus, CatalogSnapshot } from '../../shared/types';
+import { catalogViewFixture } from '../support/catalog-view-fixture';
 
 const now = '2026-10-30T04:00:00Z';
 const items: Anime[] = Array.from({ length: 8 }, (_, index) => {
@@ -46,6 +47,7 @@ test.beforeEach(async ({ page }) => {
     if (route.request().method() !== 'GET') return route.abort();
     if (pathname === '/api/status') return route.fulfill({ json: status });
     if (pathname === '/api/catalog') return route.fulfill({ json: catalog });
+    if (pathname.startsWith('/api/catalog/')) return route.fulfill({ json: catalogViewFixture(route.request().url(), catalog, status) });
     const match = pathname.match(/^\/api\/anime\/([^/]+)(\/credits)?$/);
     const item = match && items.find(value => value.id === decodeURIComponent(match[1]!));
     if (!item) return route.fulfill({ status: 404, json: { error: '未收录验收样本' } });

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { useCatalogFixture } from '../support/catalog-view-fixture';
 
 test.beforeEach(async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-29T04:00:00Z') });
@@ -120,7 +121,7 @@ test('阶段二：冷打开详情时并行按需读取资料，避免简介推�
     new PerformanceObserver(list => { for (const entry of list.getEntries()) { const shift = entry as PerformanceEntry & { value: number; hadRecentInput: boolean }; if (!shift.hadRecentInput) metrics.detailShifts.push(shift.value); } }).observe({ type: 'layout-shift', buffered: true });
   });
   let catalogReady = false, detailsBeforeCatalog = false, requests = 0;
-  await page.route('**/api/catalog', async route => { await new Promise(resolve => setTimeout(resolve, 150)); catalogReady = true; await route.fulfill({ json: catalog }); });
+  await useCatalogFixture(page, catalog, async () => { await new Promise(resolve => setTimeout(resolve, 150)); catalogReady = true; });
   await page.route(/\/api\/anime\/bgm(?:%3A|:)1$/, async route => {
     if (route.request().headers().referer?.includes('cold=1')) { detailsBeforeCatalog ||= !catalogReady; requests++; }
     await new Promise(resolve => setTimeout(resolve, 50)); await route.fulfill({ json: detail });

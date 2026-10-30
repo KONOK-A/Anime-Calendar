@@ -17,7 +17,7 @@ const columnOptions: { count: CatalogColumns; label: string; columns: number; ro
 const season = computed(() => props.season ?? state.currentSeason.value);
 const year = computed(() => season.value.split('-')[0]), quarter = computed(() => season.value.split('-')[1]);
 const monthRange = computed(() => [String((Number(quarter.value) - 1) * 3 + 1).padStart(2, '0'), String(Number(quarter.value) * 3).padStart(2, '0')]);
-const years = computed(() => [...new Set([String(new Date(state.now.value).getUTCFullYear()), String(new Date(state.now.value).getUTCFullYear() + 1), ...(state.catalog.value?.items.map(x => x.season.split('-')[0]).filter(x => /^\d{4}$/.test(x)) ?? [])])].sort((a, b) => Number(b) - Number(a)));
+const years = computed(() => [...new Set([year.value!, String(new Date(state.now.value).getUTCFullYear()), String(new Date(state.now.value).getUTCFullYear() + 1), ...state.seasons.value.map(x => x.season.split('-')[0]!).filter(x => /^\d{4}$/.test(x))])].sort((a, b) => Number(b) - Number(a)));
 watch(season, value => { state.browse.seasons[value] ??= { query: '', type: '', page: 1 }; }, { immediate: true });
 const view = computed(() => state.browse.seasons[season.value]!);
 const query = computed({ get: () => view.value.query, set: value => { view.value.query = value; } });
@@ -28,7 +28,8 @@ const pages = computed(() => Math.max(1, Math.ceil(matching.value.length / 24)))
 const gridElement = ref<HTMLElement>();
 useListMotion(gridElement, () => [query.value, type.value, season.value, page.value, state.catalogColumns.value]);
 watch([query, type, season], (value, previous) => { if (value[2] === previous[2]) page.value = 1; });
-watch([season, pages, page], () => {
+watch([season, pages, page, () => state.loading.value], () => {
+  if (state.loading.value || !state.catalog.value) return;
   const valid = Math.max(1, Math.min(pages.value, page.value));
   if (page.value !== valid) page.value = valid;
 }, { immediate: true });
@@ -69,6 +70,8 @@ async function changePage(value: number) {
     </div>
     <div class="catalog-results"><div class="section-heading"><h2 id="season-results" ref="resultsHeading" tabindex="-1">{{ seasonLabel(season) }}</h2><p>首播顺序<span v-if="pages > 1"> · {{ page }} / {{ pages }}</span></p></div>
     <div v-if="visible.length" ref="gridElement" class="poster-grid" :data-density="state.catalogColumns.value" :style="{ '--catalog-columns': state.catalogColumns.value }"><AnimeCard v-for="anime in visible" :key="anime.id" :anime="anime" /></div>
+    <div v-else-if="state.loading.value" class="empty-state" role="status"><Icon name="refresh" :size="28" class="spinning" /><h2>正在读取本季度作品…</h2></div>
+    <div v-else-if="state.viewError.value && !state.catalog.value" class="empty-state"><h2>暂时无法读取作品</h2><button class="button" @click="state.retryView">重试获取</button></div>
     <div v-else class="empty-state"><Icon name="search" :size="36" /><h2>{{ query || type ? '没有匹配的作品' : '这个季度暂无数据' }}</h2><button v-if="query || type" class="button" @click="query = ''; type = ''">清除筛选</button><button v-else class="button" :disabled="state.status.value?.refreshing" @click="state.refresh">刷新数据</button></div>
     </div>
     <nav v-if="pages > 1" class="pagination" aria-label="作品分页"><button class="button" :disabled="page <= 1" @click="changePage(page - 1)"><Icon name="back" :size="15" />上一页</button><span>{{ page }} / {{ pages }}</span><button class="button" :disabled="page >= pages" @click="changePage(page + 1)">下一页<Icon name="chevron" :size="15" /></button></nav>

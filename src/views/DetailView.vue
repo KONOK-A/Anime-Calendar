@@ -5,6 +5,7 @@ import { dateKey, formatClock, seasonLabel } from '../../shared/schedule';
 import { splitSynopsis } from '../../shared/synopsis';
 import type { AiringRule } from '../../shared/types';
 import Poster from '../components/Poster.vue';
+import { posterSource } from '../poster-source';
 import Icon from '../components/Icon.vue';
 import SceneBackdrop from '../components/SceneBackdrop.vue';
 import { animateSaved } from '../motion';
@@ -32,7 +33,7 @@ watch(() => state.appearance.reducedMotion.value, reduced => { if (reduced) feed
 onUnmounted(() => { feedback?.cancel(); clearTimeout(entryTimer); entryVersion++; });
 function hideWash(event: Event) { if (event.currentTarget instanceof HTMLImageElement) event.currentTarget.hidden = true; }
 function showPlatforms() { platformsHeading.value?.focus({ preventScroll: true }); platformsHeading.value?.scrollIntoView({ block: 'start', behavior: 'instant' }); }
-watch(() => props.id, id => {
+watch([() => props.id, () => anime.value?.id], ([id]) => {
   allCharacters.value = false; clearTimeout(entryTimer);
   const version = ++entryVersion;
   entryReady.value = state.details.has(id) || state.detailErrors.has(id);
@@ -66,7 +67,7 @@ function expandCharacters(event: Event) {
 <template>
   <section class="detail-page"><a :href="state.browse.detailFrom" class="back-link"><Icon name="back" :size="16" />{{ backLabel }}</a>
     <div v-if="anime && entryReady" class="detail-layout">
-      <header class="detail-hero"><div class="detail-image-wash" aria-hidden="true"><img v-if="detail?.image" :key="`${id}:${detail.image}`" :src="detail.image" alt="" @error="hideWash" /></div><SceneBackdrop variant="detail" :media-type="anime.type" :season="anime.season" /><div class="detail-cover"><Poster :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" priority /></div>
+      <header class="detail-hero"><div class="detail-image-wash" aria-hidden="true"><img v-if="detail?.image" :key="`${id}:${detail.image}`" :src="posterSource(id, 'hero', detail.image, detail.detailFetchedAt) ?? undefined" alt="" @error="hideWash" /></div><SceneBackdrop variant="detail" :media-type="anime.type" :season="anime.season" /><div class="detail-cover"><Poster :id="id" :revision="detail?.detailFetchedAt" size="hero" :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" priority /></div>
         <div class="detail-heading"><div class="detail-kicker"><span class="type-badge">{{ anime.type.toUpperCase() }}</span><span>{{ seasonLabel(anime.season) }}</span><span v-if="detail?.episodes">{{ detail.episodes }} 集</span></div><h1>{{ anime.title }}</h1><p class="detail-original">{{ anime.originalTitle }}</p><div class="detail-rating-row"><a v-if="detail?.rating" class="detail-rating" :href="anime.sourceUrl" target="_blank" rel="noopener noreferrer" title="Bangumi 评分"><Icon name="star" :size="17" /><strong>{{ detail.rating.score.toFixed(1) }}</strong><span class="rating-scale">/10</span><span>Bangumi评分</span><span class="rating-votes">{{ detail.rating.total.toLocaleString('zh-CN') }} 人</span><span v-if="detail.rating.rank" class="rating-rank">排名 {{ detail.rating.rank }}</span></a><span v-else class="detail-rating unrated"><Icon name="star" :size="15" />{{ ratingStatus }}</span></div><p class="detail-airing-summary"><Icon name="clock" :size="17" />{{ ruleLabel }}<span v-if="anime.networkAiring" class="network-badge">网络先行</span></p>
           <div class="detail-actions"><button ref="followButton" class="button primary follow-button" :class="{ followed: saved }" :aria-pressed="saved" @click="toggleSaved"><Icon :name="saved ? 'check' : 'bookmark'" :size="18" />{{ saved ? '已在追番' : '加入追番' }}</button><button v-if="anime.platforms.length" class="button website-button" @click="showPlatforms">查看播放平台<Icon name="chevron" :size="15" /></button><a v-if="anime.officialSite" class="button website-button" :href="anime.officialSite" target="_blank" rel="noopener noreferrer">作品官网<Icon name="external" :size="15" /></a></div>
           <div class="detail-tags"><span v-for="tag in (detail?.tags ?? [])" :key="tag">{{ tag }}</span></div>
@@ -90,6 +91,8 @@ function expandCharacters(event: Event) {
         <p class="detail-source"><a :href="anime.sourceUrl" target="_blank" rel="noopener noreferrer">来源条目</a></p>
       </div></div>
     <div v-else-if="anime" class="detail-entry-loading" role="status"><span class="entry-cover" aria-hidden="true" /><div><p>正在读取作品信息…</p><i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div></div>
+    <div v-else-if="state.loading.value" class="detail-entry-loading" role="status"><span class="entry-cover" aria-hidden="true" /><div><p>正在读取作品信息…</p><i aria-hidden="true" /><i aria-hidden="true" /></div></div>
+    <div v-else-if="state.viewError.value && !state.catalog.value" class="empty-state"><h1>暂时无法读取作品</h1><button class="button" @click="state.retryView">重试获取</button></div>
     <div v-else class="empty-state"><Icon name="search" :size="36" /><h1>没有找到这部作品</h1><p>当前目录未收录该作品。</p><a class="button" href="#/season">返回季度目录</a></div>
   </section>
 </template>

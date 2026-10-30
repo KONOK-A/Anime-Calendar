@@ -1,0 +1,38 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import type { Server } from 'node:http';
+import { createApp } from '../server/app.js';
+import { AnimeService } from '../server/service.js';
+import { runtimeConfig } from '../server/runtime.js';
+const directories: string[] = [], servers: Server[] = [];
+afterEach(async () => { for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } for (const path of directories.splice(0)) await rm(path, { recursive: true, force: true }); });
+describe('独立静态分发', () => {
+  it('只重写构建JS/CSS入口，保留同源回退与页面初始化脚本', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'static-source-')); directories.push(directory);
+    const current = join(directory, 'current'), retained = join(directory, 'retained');
+    await mkdir(join(current, 'assets'), { recursive: true }); await mkdir(join(retained, 'assets'), { recursive: true });
+    await writeFile(join(current, 'index.html'), '<head><script>window.initialTheme=true</script><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/assets/index-12345678.css"></head><body><script type="module" crossorigin src="/assets/index-12345678.js"></script></body>');
+    await writeFile(join(current, 'assets', 'index-12345678.js'), 'export const value=1');
+    await writeFile(join(retained, 'assets', 'old-12345678.js'), 'export const old=1');
+    const service = new AnimeService({ directory });
+    const app = createApp(service, current, { publicOrigin: 'https://anime.example.test', assetOrigin: 'https://static.example.test', assetsDirectory: retained });
+    const server = app.listen(0, '127.0.0.1'); servers.push(server); await new Promise<void>(resolve => server.once('listening', resolve));
+    const address = server.address(); if (!address || typeof address === 'string') throw new Error('port'); const base = `http://127.0.0.1:${address.port}`;
+    const response = await fetch(base); const html = await response.text();
+    expect(html).toContain('https://static.example.test/assets/index-12345678.js'); expect(html).toContain('https://static.example.test/assets/index-12345678.css');
+    expect(html).toContain('window.initialTheme=true'); expect(html).toContain('href="/favicon.svg"'); expect(html).toContain('onerror='); expect(response.headers.get('cache-control')).toBe('no-cache');
+    const marker = { 'x-anime-static-origin': '1' };
+    const asset = await fetch(`${base}/assets/index-12345678.js`, { headers: marker });
+    expect(asset.status).toBe(200); expect(asset.headers.get('access-control-allow-origin')).toBe('https://anime.example.test'); expect(asset.headers.get('cache-control')).toContain('immutable');
+    expect((await fetch(`${base}/assets/old-12345678.js`, { headers: marker })).status).toBe(200);
+    for (const path of ['/', '/index.html', '/api/status', '/media/posters/bgm:1/card', '/favicon.svg']) expect((await fetch(base + path, { headers: marker })).status, path).toBe(404);
+  });
+  it('静态域名必须为独立HTTPS Origin，只能随公网模式启用', () => {
+    const root = process.cwd();
+    expect(() => runtimeConfig({ ANIME_CALENDAR_STATIC_ORIGIN: 'https://static.example.test' }, root)).toThrow();
+    for (const origin of ['http://static.example.test', 'https://user:secret@static.example.test', 'https://static.example.test/path']) expect(() => runtimeConfig({ ANIME_CALENDAR_ORIGIN: 'https://anime.example.test', ANIME_CALENDAR_STATIC_ORIGIN: origin }, root)).toThrow();
+    expect(runtimeConfig({ ANIME_CALENDAR_ORIGIN: 'https://anime.example.test', ANIME_CALENDAR_STATIC_ORIGIN: 'https://static.example.test/' }, root)).toMatchObject({ assetOrigin: 'https://static.example.test' });
+  });
+});

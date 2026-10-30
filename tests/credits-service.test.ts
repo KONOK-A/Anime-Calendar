@@ -51,7 +51,8 @@ describe('详情补充资料缓存与独立失败', () => {
   it('过期后一源异常保留旧资料，另一个来源可以正常更新', async () => {
     const context = await setup(); await context.service.credits('bgm:1');
     context.time = new Date('2026-10-31T04:00:00Z'); context.mode = 'bad-staff';
-    const credits = await context.service.credits('bgm:1');
+    const stale = await context.service.credits('bgm:1'); expect(stale?.revalidating).toBe(true);
+    const credits = await context.service.credits('bgm:1', true);
     expect(credits?.staff).toContainEqual({ role: '导演', names: ['导演甲'] });
     expect(credits?.sources.staff.error).toContain('响应格式无效');
     expect(credits?.sources.staff.fetchedAt).toBe('2026-10-29T04:00:00.000Z');
@@ -62,7 +63,9 @@ describe('详情补充资料缓存与独立失败', () => {
     const credits = await context.service.credits('bgm:1');
     expect(credits?.staff).toContainEqual({ role: '音乐', names: ['ha-j'] }); expect(credits?.cast).toEqual([]);
     expect(credits?.sources.staff.error).toBeTruthy(); expect(credits?.sources.cast.error).toBeTruthy();
-    context.mode = 'ok'; expect((await context.service.credits('bgm:1'))?.cast[0].name).toBe('角色甲');
+    context.mode = 'ok'; expect((await context.service.credits('bgm:1'))?.sources.cast.error).toBeTruthy();
+    context.time = new Date(context.time.getTime() + 60_001);
+    expect((await context.service.credits('bgm:1', true))?.cast[0].name).toBe('角色甲');
   });
   it('空列表表示尚未收录，无需伪造CV，未知ID不请求上游', async () => {
     const context = await setup(); context.mode = 'empty-cast';
