@@ -16,6 +16,11 @@ export interface CatalogSnapshot extends CatalogBase {
 }
 export interface AiringEvent { animeId: string; at: string; basis: 'estimated' | 'source' | 'official'; status: 'scheduled' | 'cancelled'; sourceUrl: string; note?: string }
 export interface AnimeRating { score: number; total: number; rank: number | null }
+export interface SeasonRatingEntry { id: string; rating: AnimeRating | null; fetchedAt: string | null; error: string | null }
+export interface SeasonRatings {
+  schemaVersion: 1; scope: { type: 'ratings'; key: string; season: string }; ids: string[];
+  entries: SeasonRatingEntry[]; total: number; processed: number; status: 'loading' | 'ready' | 'partial'; updatedAt: string | null;
+}
 export interface AnimeDetail extends Anime { summary: string; image: string | null; imageVariants?: { thumb: string | null; card: string | null; hero: string | null }; episodes: number | null; tags: string[]; staff: StaffCredit[]; rating: AnimeRating | null; detailFetchedAt: string | null; detailError: string | null; revalidating?: boolean }
 export interface SourceState { fetchedAt: string | null; error: string | null; revalidating?: boolean }
 export interface StaffCredit { role: string; names: string[] }

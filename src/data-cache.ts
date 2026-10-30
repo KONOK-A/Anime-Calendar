@@ -40,8 +40,8 @@ export class DataCache {
     while (memory.size > limits[kind]) memory.delete(memory.keys().next().value!);
   }
   private sourceTime(data: unknown) {
-    const value = data as { detailFetchedAt?: string; status?: { sources?: Record<string, { fetchedAt?: string | null }> } } | null;
-    const dates = [value?.detailFetchedAt, ...Object.values(value?.status?.sources ?? {}).map(source => source?.fetchedAt)];
+    const value = data as { updatedAt?: string | null; detailFetchedAt?: string; status?: { sources?: Record<string, { fetchedAt?: string | null }> } } | null;
+    const dates = [value?.updatedAt, value?.detailFetchedAt, ...Object.values(value?.status?.sources ?? {}).map(source => source?.fetchedAt)];
     return Math.max(0, ...dates.map(date => date ? Date.parse(date) : 0).filter(Number.isFinite));
   }
   write<T>(kind: CacheKind, key: string, data: T, etag: string | null): Promise<void> {

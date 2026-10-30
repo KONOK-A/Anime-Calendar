@@ -8,6 +8,7 @@ import type { CatalogColumns, WeeklyLayout } from './presentation';
 import { DataCache, type CachedData } from './data-cache';
 import { isAnimeDetail, isCatalogView } from './data-validation';
 import { catalogRequests, type CatalogRequest } from './catalog-requests';
+import { createSeasonRatings } from './season-ratings';
 
 const storage = { getItem: (key: string) => window.localStorage.getItem(key), setItem: (key: string, value: string) => window.localStorage.setItem(key, value) };
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
@@ -36,6 +37,8 @@ export function createAppState() {
   const now = ref(new Date().toISOString());
   const currentSeason = computed(() => seasonFrom(now.value));
   const cache = new DataCache(text => { if (notice.value?.kind !== 'error') notify(text); });
+  const seasonRatings = createSeasonRatings(cache);
+  onUnmounted(() => seasonRatings.cancel());
   const knownItems = new Map<string, Anime>(), viewRequests = new Map<string, Promise<{ data: CatalogView; etag: string | null }>>();
   const controllers = new Set<AbortController>();
   const confirmations = new Set<AbortController>();
@@ -303,7 +306,7 @@ export function createAppState() {
     const blob = new Blob([exportBackup(favorites.value, new Date().toISOString())], { type: 'application/json' });
     const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = `anime-calendar-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return { catalog, status, seasons, loading, missingIds, unresolvedIds, viewError, loadPage, retryView, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
+  return { catalog, status, seasons, seasonRatings, loading, missingIds, unresolvedIds, viewError, loadPage, retryView, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
 }
 export type AppState = ReturnType<typeof createAppState>;
 export const appKey: InjectionKey<AppState> = Symbol('anime-calendar');

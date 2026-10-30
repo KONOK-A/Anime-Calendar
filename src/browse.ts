@@ -1,6 +1,7 @@
 import { reactive, watch } from 'vue';
+import type { SeasonSort } from './season-sort';
 
-export interface SeasonBrowse { query: string; type: '' | 'tv' | 'web'; page: number }
+export interface SeasonBrowse { query: string; type: '' | 'tv' | 'web'; page: number; sort?: SeasonSort }
 interface BrowseState {
   version: 1;
   weekly: { selectedDay: string; onlyFavorites: boolean; horizontalScroll?: Record<string, number> };
@@ -28,7 +29,7 @@ export function useBrowseState(notify: (text: string) => void) {
       for (const [season, entry] of Object.entries(saved.seasons ?? {})) {
         if (!/^\d{4}-[1-4]$/.test(season) || !entry || typeof entry !== 'object') continue;
         const value = entry as Partial<SeasonBrowse>;
-        state.seasons[season] = { query: typeof value.query === 'string' ? value.query.slice(0, 500) : '', type: value.type === 'tv' || value.type === 'web' ? value.type : '', page: Number.isSafeInteger(value.page) && value.page! > 0 ? value.page! : 1 };
+        state.seasons[season] = { query: typeof value.query === 'string' ? value.query.slice(0, 500) : '', type: value.type === 'tv' || value.type === 'web' ? value.type : '', page: Number.isSafeInteger(value.page) && value.page! > 0 ? value.page! : 1, sort: value.sort === 'rating' ? 'rating' : 'premiere' };
       }
     }
   } catch { notify('浏览状态无法恢复，当前操作仍可使用；本标签页的浏览偏好可能无法保存。'); }

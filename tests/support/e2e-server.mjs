@@ -30,7 +30,7 @@ const service = new AnimeService({ directory, now: () => new Date('2026-10-29T04
   } else if (url.endsWith('/characters')) {
     const id = Number(url.split('/').at(-2));
     value = id === 1 ? Array.from({ length: 10 }, (_, index) => ({ id: index + 100, name: `原名${index}`, relation: index === 0 ? '主角' : '配角', actors: index === 7 ? [] : [{ id: index + 200, name: `声优${index}` }] })) : [];
-  } else if (url.includes('/subjects/')) { const id = Number(url.split('/').at(-1)); value = { id, name: `作品${id}`, name_cn: '', summary: '这是测试中的作品简介，用来验证详情、收藏和平台链接。' + (id === 1 ? '\r\n\r\n[简介原文]\r\nこれは折りたたむ原文です。' : ''), images: { large: 'http://127.0.0.1:4321/missing-cover.jpg' }, eps: 12, rating: id === 1 ? { score: 7.8, total: 1234, rank: 321 } : { score: 0, total: 0, rank: 0 }, tags: [{ name: '青春' }, { name: '日常' }], infobox: id === 1 ? [{ key: '音乐', value: '音乐家丁' }] : [] }; }
+  } else if (url.includes('/subjects/')) { const id = Number(url.split('/').at(-1)); value = { id, name: `作品${id}`, name_cn: '', summary: '这是测试中的作品简介，用来验证详情、收藏和平台链接。' + (id === 1 ? '\r\n\r\n[简介原文]\r\nこれは折りたたむ原文です。' : ''), images: { large: 'http://127.0.0.1:4321/missing-cover.jpg' }, eps: 12, rating: id === 1 ? { score: 7.8, total: 1234, rank: 321 } : id >= 1000 && id <= 1024 && id !== 1002 ? { score: id === 1024 ? 9.9 : 6 + (id % 3) / 10, total: 100, rank: 0 } : { score: 0, total: 0, rank: 0 }, tags: [{ name: '青春' }, { name: '日常' }], infobox: id === 1 ? [{ key: '音乐', value: '音乐家丁' }] : [] }; }
   else value = url.includes('/calendar') ? calendar : catalog;
   return new Response(JSON.stringify(value), { status: 200 });
 } });

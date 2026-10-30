@@ -12,6 +12,7 @@ test('番表到详情、收藏、刷新保留与仅看收藏', async ({ page }, 
   await expect(page.getByRole('heading', { name: '星旅', exact: true })).toBeVisible();
   await expect(page.getByText('这是测试中的作品简介', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: '加入追番', exact: true }).click();
+  await expect(page.getByRole('button', { name: '已在追番', exact: true })).toBeVisible();
   await page.reload(); await expect(page.getByRole('button', { name: '已在追番', exact: true })).toBeVisible();
   await page.getByRole('link', { name: '本周番表', exact: true }).click();
   await page.getByRole('checkbox', { name: '仅看收藏' }).check();

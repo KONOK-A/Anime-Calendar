@@ -35,6 +35,15 @@ export function createApp(service: AnimeService, staticDirectory: string, option
   });
   app.use(express.json({ limit: '8kb' }));
   app.get('/api/status', (_req, res) => res.json(service.status()));
+  app.get('/api/catalog/ratings', (req, res) => {
+    let season: string;
+    try { const scope = catalogScope('season', req.query, new Date().toISOString()); if (scope.type !== 'season') throw new Error(); season = scope.season; }
+    catch { res.status(400).json({ error: '季度参数无效。' }); return; }
+    const catalog = service.catalog();
+    if (!catalog) { res.status(503).json({ error: '尚无可用目录，请稍后重试。' }); return; }
+    try { res.json(service.seasonRatings.get(season, catalog.items.filter(item => item.season === season))); }
+    catch { res.setHeader('Retry-After', '5'); res.status(503).json({ error: '评分任务较多，请稍后重试。' }); }
+  });
   app.get('/media/posters/:id/:size', async (req, res) => {
     try {
       const data = await service.posters.get(req.params.id, req.params.size);

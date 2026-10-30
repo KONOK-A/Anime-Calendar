@@ -9,6 +9,7 @@ import { infoboxStaff, mergeStaff, normalizeCast, normalizeCharacterName, normal
 import { UpstreamClient } from './upstream.js';
 import { ResourceCache } from './resources.js';
 import { PosterError, PosterStore } from './posters.js';
+import { SeasonRatingService } from './season-ratings.js';
 
 interface Options { directory: string; now?: () => Date; fetcher?: (url: string, init?: RequestInit) => Promise<Response>; overridesPath?: string; observe?: (event: Record<string, unknown>) => void }
 const CATALOG_URL = 'https://raw.githubusercontent.com/bangumi-data/bangumi-data/master/dist/data.json';
@@ -48,6 +49,7 @@ export class AnimeService {
   readonly upstream: UpstreamClient;
   private readonly resources: ResourceCache;
   readonly posters: PosterStore;
+  readonly seasonRatings: SeasonRatingService;
   private base: CatalogBase | null = null;
   private activeIds: string[] = [];
   private overrides = emptyOverrides();
@@ -70,6 +72,7 @@ export class AnimeService {
   constructor(private readonly options: Options) {
     this.store = new CacheStore(options.directory); this.now = options.now ?? (() => new Date()); this.upstream = new UpstreamClient(options.fetcher, options.observe);
     this.resources = new ResourceCache(this.store, this.upstream, this.now);
+    this.seasonRatings = new SeasonRatingService(id => this.detail(id, true), this.now);
     this.posters = new PosterStore(join(options.directory, 'media'), this.upstream, async (id, size) => {
       if (!this.catalog()) throw new PosterError('目录正在初始化。', 503);
       if (!this.item(id)) throw new PosterError('当前目录未收录该作品。', 404);
@@ -122,11 +125,11 @@ export class AnimeService {
   epoch(): string { this.catalog(); return `${this.statusVersion}:${this.store.revision}:${this.posters.revision}:${this.snapshotAt}`; }
   async drain(): Promise<void> {
     do {
-      await Promise.allSettled([this.refreshPromise, this.maintenancePromise, ...this.details.values(), ...this.creditRequests.values(), ...this.characterRequests.values(), this.resources.drain(), this.posters.drain()]);
+      await Promise.allSettled([this.refreshPromise, this.maintenancePromise, ...this.details.values(), ...this.creditRequests.values(), ...this.characterRequests.values(), this.seasonRatings.drain(), this.resources.drain(), this.posters.drain()]);
       await this.resources.drain(); await this.store.drain(); await this.upstream.idle();
     } while (this.refreshPromise || this.maintenancePromise || this.details.size || this.creditRequests.size || this.characterRequests.size);
   }
-  close(): void { this.upstream.close(); }
+  close(): void { this.seasonRatings.close(); this.upstream.close(); }
   refresh(mode: 'all' | 'stale' = 'all'): Promise<void> {
     if (this.refreshPromise) return this.refreshPromise;
     this.statusVersion++;

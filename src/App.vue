@@ -35,6 +35,9 @@ function savePendingScroll() {
 async function restorePosition(focusContent = false) {
   const target = hash.value;
   await nextTick();
+  const season = selectedSeason.value ?? state.currentSeason.value;
+  if (target.startsWith('#/season') && state.browse.seasons[season]?.sort === 'rating') await state.seasonRatings.ready();
+  if (target !== hash.value) return;
   cancelAnimationFrame(scrollFrame);
   scrollFrame = requestAnimationFrame(() => {
     if (target !== hash.value) return;
