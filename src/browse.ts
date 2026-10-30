@@ -3,7 +3,7 @@ import { reactive, watch } from 'vue';
 export interface SeasonBrowse { query: string; type: '' | 'tv' | 'web'; page: number }
 interface BrowseState {
   version: 1;
-  weekly: { selectedDay: string; onlyFavorites: boolean };
+  weekly: { selectedDay: string; onlyFavorites: boolean; horizontalScroll?: Record<string, number> };
   seasons: Record<string, SeasonBrowse>;
   scroll: Record<string, number>;
   detailFrom: string;
@@ -19,6 +19,9 @@ export function useBrowseState(notify: (text: string) => void) {
     if (saved?.version === 1) {
       if (typeof saved.weekly?.selectedDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(saved.weekly.selectedDay)) state.weekly.selectedDay = saved.weekly.selectedDay;
       state.weekly.onlyFavorites = saved.weekly?.onlyFavorites === true;
+      for (const [view, position] of Object.entries(saved.weekly?.horizontalScroll ?? {})) {
+        if (/^(Asia\/Shanghai|Asia\/Tokyo)\|\d{4}-\d{2}-\d{2}\|rows\|(all|favorites)$/.test(view) && typeof position === 'number' && Number.isFinite(position) && position >= 0) (state.weekly.horizontalScroll ??= {})[view] = position;
+      }
       if (typeof saved.detailFrom === 'string' && isListRoute(saved.detailFrom)) state.detailFrom = saved.detailFrom;
       if (typeof saved.lastSeason === 'string' && saved.lastSeason.startsWith('#/season') && isListRoute(saved.lastSeason)) state.lastSeason = saved.lastSeason;
       for (const [route, position] of Object.entries(saved.scroll ?? {})) if (isListRoute(route) && typeof position === 'number' && Number.isFinite(position) && position >= 0) state.scroll[route] = position;

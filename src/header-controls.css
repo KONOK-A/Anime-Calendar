@@ -26,12 +26,11 @@
 }
 @media(max-width:767px){
   .toolbar-controls{gap:5px}
-  .toolbar-controls>label{height:38px;border-radius:8px}
-  .toolbar-controls select{height:36px;padding:6px 8px;font-size:11px}
-  .toolbar-controls .timezone-control>svg{display:none}
-  .toolbar-controls .timezone-control select{width:96px}
-  .toolbar-controls .theme-control select{width:93px;padding-left:28px}
-  .toolbar-controls .theme-control>svg{left:8px;width:15px;height:15px}
+  .toolbar-controls>label{height:44px;border-radius:8px}
+  .toolbar-controls select{height:42px;padding:6px 8px;font-size:11px}
+  .toolbar-controls .timezone-control>svg,.toolbar-controls .theme-control>svg{display:none}
+  .toolbar-controls .timezone-control select{width:94px}
+  .toolbar-controls .theme-control select{width:76px;padding-left:8px}
 }
 @media(max-width:359px){
   .header-inner{gap:6px}

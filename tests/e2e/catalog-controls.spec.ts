@@ -72,7 +72,9 @@ test('季度卡片可切换4、5、6列并记忆，不改变分页或追番页�
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1'])));
   await page.goto('/#/favorites'); await page.reload();
   await expect(page.locator('.collection-grid .anime-card')).toHaveCount(1);
-  expect(await page.locator('.collection-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(4);
+  expect(await page.locator('.collection-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1);
+  const collectionWidth = (await page.locator('.collection-grid').boundingBox())!.width;
+  expect((await page.locator('.collection-grid .anime-card').boundingBox())!.width).toBeGreaterThan(collectionWidth * .85);
 });
 
 test('小屏保持两列，恢复桌面后沿用选择且无横向溢出', async ({ page }) => {

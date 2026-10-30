@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" /><meta name="theme-color" content="#F4F8FB" /><title>番时记 · 日本新番日历</title><link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" /><meta name="theme-color" content="#F4F6FD" /><title>番时记 · 日本新番日历</title><link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script>
-      (() => { let preference = 'system'; try { const value = localStorage.getItem('anime-calendar:theme'); if (value === 'light' || value === 'dark') preference = value; } catch {} const theme = preference === 'system' ? matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' : preference; document.documentElement.dataset.theme = theme; document.documentElement.dataset.themePreference = preference; document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#121D30' : '#F4F8FB'; })();
+      (() => { let preference = 'system'; try { const value = localStorage.getItem('anime-calendar:theme'); if (value === 'light' || value === 'dark') preference = value; } catch {} const theme = preference === 'system' ? matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' : preference; document.documentElement.dataset.theme = theme; document.documentElement.dataset.themePreference = preference; document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#11182B' : '#F4F6FD'; })();
     </script>
-    <style>html{background:#F4F8FB;color-scheme:light}html[data-theme=dark]{background:#121D30;color-scheme:dark}</style>
+    <style>html{background:#F4F6FD;color-scheme:light}html[data-theme=dark]{background:#11182B;color-scheme:dark}</style>
   </head>
   <body><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>

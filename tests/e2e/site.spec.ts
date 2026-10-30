@@ -59,13 +59,17 @@ test('备份导入合并去重，无效备份不损坏收藏，允许移除失�
 test('多个标签页的收藏添加、移除和导入不会互相覆盖', async ({ page, context }) => {
   const second = await context.newPage(); await second.clock.install({ time: new Date('2026-10-29T04:00:00Z') });
   await page.goto('/#/anime/bgm:1'); await second.goto('/#/anime/bgm:2');
+  await page.bringToFront();
   await page.getByRole('button', { name: '加入追番', exact: true }).click();
+  await second.bringToFront();
   await second.getByRole('button', { name: '加入追番', exact: true }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('anime-calendar:favorites:v1') ?? '[]'))).toEqual(['bgm:1', 'bgm:2']);
+  await page.bringToFront();
   await page.getByRole('link', { name: '我的追番', exact: true }).click();
   await expect(page.getByRole('link', { name: '查看放课后的音符详情' })).toBeVisible();
   await page.getByRole('button', { name: '取消追番放课后的音符', exact: true }).click();
   await expect(second.getByRole('button', { name: '加入追番', exact: true })).toBeVisible();
+  await second.bringToFront();
   await second.getByRole('link', { name: '我的追番', exact: true }).click();
   await second.getByLabel('导入追番备份').setInputFiles({ name: 'extra.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ version: 1, favorites: ['bgm:3'] })) });
   await expect(page.getByRole('link', { name: '查看漫长的夏日详情' })).toBeVisible(); await expect(page.getByRole('link', { name: '查看星旅详情' })).toBeVisible();
@@ -86,7 +90,8 @@ test('刷新状态请求断线后仍可重试，不会永久禁用刷新', async
 
 test('详情首次连接失败会说明错误并允许就地重试', async ({ page }) => {
   await page.route('**/api/anime/**', route => route.abort('failed'));
-  await page.goto('/#/anime/bgm:1');
+  // A fresh document avoids the home page's deliberately reusable detail cache.
+  await page.goto('/?detail-error=cold#/anime/bgm:1');
   await expect(page.getByText('详情请求失败', { exact: false })).toBeVisible();
   await expect(page.getByRole('button', { name: '重试详情', exact: true })).toBeVisible();
   await page.unroute('**/api/anime/**'); await page.getByRole('button', { name: '重试详情', exact: true }).click();

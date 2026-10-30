@@ -10,7 +10,7 @@ export function useTheme(notify: (text: string) => void) {
   media.addEventListener('change', updateSystem); reduced.addEventListener('change', updateMotion);
   watch(theme, value => {
     document.documentElement.dataset.theme = value;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', value === 'dark' ? '#121D30' : '#F4F8FB');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', value === 'dark' ? '#11182B' : '#F4F6FD');
   }, { immediate: true, flush: 'sync' });
   function setTheme(value: ThemePreference) {
     preference.value = value; document.documentElement.dataset.themePreference = value;

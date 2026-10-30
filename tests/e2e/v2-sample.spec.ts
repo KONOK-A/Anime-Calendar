@@ -63,7 +63,7 @@ test('V2：详情直达使用番表返回入口', async ({ page, context }) => {
 test('V2：追番卡显示下一次参考排期并区分未知排期', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bgm:2', 'bgm:4'])));
   await page.goto('/#/favorites'); await page.reload();
-  const cards = page.locator('.poster-grid .anime-card');
+  const cards = page.locator('.collection-grid .anime-card');
   await expect(cards.first()).toContainText('放课后的音符');
   await expect(cards.first()).toContainText('今天 20:00');
   await expect(cards.first()).not.toContainText('预计');
@@ -91,7 +91,7 @@ test('V2：季度翻页定位列表并在返回后保留页码', async ({ page }
 
 test('V2：详情返回和浏览器后退恢复滚动位置', async ({ page }) => {
   await page.goto('/#/season/2025/4');
-  const target = page.locator('.poster-grid .anime-link').nth(12);
+  const target = page.locator('.catalog-page .poster-grid .anime-link').nth(12);
   await target.scrollIntoViewIfNeeded();
   const before = await page.evaluate(() => scrollY);
   expect(before).toBeGreaterThan(250);
@@ -162,7 +162,7 @@ test('V2：初始主题在应用脚本运行前生效', async ({ page }) => {
   await page.route('**/assets/*.js', route => route.abort('failed'));
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(18, 29, 48)');
+  await expect(page.locator('html')).toHaveCSS('background-color', 'rgb(17, 24, 43)');
 });
 
 test('V2：切换到页数相同的季度也会夹紧已保存的大页码', async ({ page }) => {
@@ -234,12 +234,14 @@ test('V2：主视觉使用矢量排版且不再加载人物风景图', async ({ 
   await page.reload();
   const scene = page.getByRole('region', { name: '今日作品' }).locator('.scene-backdrop');
   await expect(scene.locator('picture, img')).toHaveCount(0);
-  await expect(scene.locator('svg')).toBeVisible();
+  await expect(scene.locator('svg:visible')).toHaveCount(1);
+  await expect(scene.locator('svg:visible')).toBeVisible();
   await expect(page.getByRole('region', { name: '今日作品' })).toContainText('20:00');
   await page.getByRole('combobox', { name: '页面主题' }).selectOption('dark');
-  await expect(scene.locator('svg')).toBeVisible();
+  await expect(scene.locator('svg:visible')).toHaveCount(1);
+  await expect(scene.locator('svg:visible')).toBeVisible();
   await page.goto('/#/anime/bgm:1');
-  await expect(page.locator('.detail-hero .scene-backdrop svg')).toBeVisible();
+  await expect(page.locator('.detail-hero .scene-backdrop .broadcast-geometry')).toBeVisible();
   await expect(page.locator('.detail-hero .scene-backdrop img')).toHaveCount(0);
   expect(artworkRequests).toBe(0);
 });

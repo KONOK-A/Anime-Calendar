@@ -90,9 +90,10 @@ test('排期说明支持Esc关闭，返回番表后仍可正常开合', async ({
 
 test('季度、追番和番表卡片显示有效评分，无投票作品不显示零分', async ({ page }, info) => {
   await page.goto('/#/season/2026/4');
-  const rated = page.locator('.anime-card[data-anime-id="bgm:1"]');
+  const catalog = page.locator('.catalog-page');
+  const rated = catalog.locator('.anime-card[data-anime-id="bgm:1"]');
   await expect(rated.getByLabel('Bangumi评分 7.8', { exact: true })).toBeVisible();
-  const unrated = page.locator('.anime-card[data-anime-id="bgm:2"]');
+  const unrated = catalog.locator('.anime-card[data-anime-id="bgm:2"]');
   await expect(unrated.locator('.poster-ready')).toBeVisible();
   await expect(unrated.locator('.card-rating')).toHaveCount(0);
   await rated.getByRole('button', { name: '追番星旅', exact: true }).click();
