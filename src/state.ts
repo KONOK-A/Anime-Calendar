@@ -9,7 +9,7 @@ import type { CatalogColumns, WeeklyLayout } from './presentation';
 const storage = { getItem: (key: string) => window.localStorage.getItem(key), setItem: (key: string, value: string) => window.localStorage.setItem(key, value) };
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
   let response: Response;
-  try { response = await fetch(url, init); } catch { throw new Error('无法连接本地服务，请检查启动窗口是否仍在运行。'); }
+  try { response = await fetch(url, init); } catch { throw new Error('无法连接服务，请稍后重试。'); }
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? `请求失败（${response.status}）`);
   return value as T;

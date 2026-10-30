@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-const directory = resolve('docs/screenshots'); await mkdir(directory, { recursive: true });
+const directory = resolve('.local/visual-check'); await mkdir(directory, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const errors = [];
 try {

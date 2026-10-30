@@ -81,7 +81,7 @@ test('刷新状态请求断线后仍可重试，不会永久禁用刷新', async
   await page.route('**/api/refresh', route => route.fulfill({ json: { ...status, refreshing: true } }));
   await page.route('**/api/status', route => route.abort('failed'));
   await page.getByRole('button', { name: '刷新数据', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('无法连接本地服务');
+  await expect(page.getByRole('alert')).toContainText('无法连接服务');
   await expect(page.getByRole('button', { name: '刷新数据', exact: true })).toBeEnabled();
   await page.unroute('**/api/status'); await page.unroute('**/api/refresh');
   await page.getByRole('button', { name: '刷新数据', exact: true }).click();
