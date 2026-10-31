@@ -81,8 +81,7 @@ export function parseFilmarksRating(html: string, link: FilmarksLink): ParsedRat
     const rating = node.aggregateRating;
     const numeric = (value: unknown) => typeof value === 'string' && /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : value;
     if (numeric(rating.bestRating) !== 5) throw new Error('Filmarks 满分格式无效');
-    // reviewCount counts written reviews; it is not a reliable count of scored users.
-    return { score: score(numeric(rating.ratingValue), 5), votes: null };
+    return { score: score(numeric(rating.ratingValue), 5), votes: votes(numeric(rating.reviewCount)) };
   }
   const matchingBreadcrumb = nodes.filter(isRecord).some(node => node['@type'] === 'BreadcrumbList' && Array.isArray(node.itemListElement) && node.itemListElement.some(entry => isRecord(entry) && isRecord(entry.item) && entry.item['@id'] === expected));
   if (candidates.length || matchingBreadcrumb) return { score: null, votes: null };

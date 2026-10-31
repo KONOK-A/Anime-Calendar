@@ -12,7 +12,7 @@ export interface MultiRatingOptions {
   filmarksLink?: (item: RatingItem) => FilmarksLink | null | undefined;
 }
 interface Spec { provider: Exclude<RatingProvider, 'bangumi'>; url: string; link: string; maxScore: 5 | 10 | 100; headers?: Record<string, string>; method?: 'POST'; body?: string; parse: (raw: string) => ParsedRating }
-interface State { source: ProviderRating; retryUntil: number }
+interface State { source: ProviderRating; retryUntil: number; needsRefresh?: boolean }
 interface Queued { spec: Spec; run: () => Promise<ProviderRating>; resolve: (value: ProviderRating) => void; reject: (error: Error) => void }
 interface SourceResult { source: ProviderRating; revalidating: boolean; retryAfterMs?: number }
 const DAY = 24 * 3_600_000;
@@ -100,7 +100,7 @@ export class MultiRatingService {
   private retryAfter(key: string, spec: Spec, source: ProviderRating, revalidating: boolean): number | undefined {
     if (this.closed || revalidating || source.status === 'unrated' && !source.error) return;
     const now = this.options.now().getTime();
-    if (source.fetchedAt && now - Date.parse(source.fetchedAt) < DAY && !source.error) return;
+    if (!this.states.get(key)?.needsRefresh && source.fetchedAt && now - Date.parse(source.fetchedAt) < DAY && !source.error) return;
     const until = Math.max(this.states.get(key)?.retryUntil ?? 0, this.providerFailures.get(spec.provider) ?? 0);
     const remaining = Math.ceil(until - now);
     if (Number.isSafeInteger(remaining) && remaining > 0) return remaining;
@@ -119,14 +119,15 @@ export class MultiRatingService {
     if (!lookup) {
       lookup = this.options.store.read(key, value => {
         if (!validProviderRating(value) || value.provider !== spec.provider || value.url !== spec.link || !['ready', 'unrated'].includes(value.status) || value.maxScore !== spec.maxScore) throw new Error('评分缓存身份无效');
-        return value;
+        const { filmarksCountsVersion, ...source } = value as ProviderRating & { filmarksCountsVersion?: unknown };
+        return { source, needsRefresh: spec.provider === 'filmarks' && filmarksCountsVersion !== 1 };
       }).then(result => {
         if (!result) {
           this.missing.set(key, this.options.now().getTime() + 60_000);
           while (this.missing.size > 256) this.missing.delete(this.missing.keys().next().value!);
           return null;
         }
-        const source = { ...result.data, fetchedAt: result.fetchedAt }; this.remember(key, { source, retryUntil: 0 }); return source;
+        const source = { ...result.data.source, fetchedAt: result.fetchedAt }; this.remember(key, { source, retryUntil: 0, needsRefresh: result.data.needsRefresh }); return source;
       }).finally(() => { this.lookups.delete(key); });
       this.lookups.set(key, lookup);
     }
@@ -142,7 +143,7 @@ export class MultiRatingService {
     const cached = known?.source ?? (this.pending.has(key) ? null : await this.cached(key, spec));
     const fallback: ProviderRating = cached ?? { provider, score: null, maxScore: spec.maxScore, votes: null, url: spec.link, fetchedAt: null, status: 'unavailable' };
     let task = this.pending.get(key);
-    const fresh = !!cached?.fetchedAt && this.options.now().getTime() - Date.parse(cached.fetchedAt) < DAY;
+    const fresh = !this.states.get(key)?.needsRefresh && !!cached?.fetchedAt && this.options.now().getTime() - Date.parse(cached.fetchedAt) < DAY;
     if (!task && !fresh && this.cooling(provider)) { const source = this.unavailable(spec, cached); return { source, revalidating: false, retryAfterMs: this.retryAfter(key, spec, source, false) }; }
     if (!task && !this.closed && refresh && !fresh && (this.states.get(key)?.retryUntil ?? 0) <= this.options.now().getTime()) {
       if (this.pending.size >= 96) return { source: { ...fallback, error: '评分更新任务较多，请稍后重试。' }, revalidating: false, retryAfterMs: 1000 };
@@ -174,6 +175,7 @@ export class MultiRatingService {
   }
   private async load(key: string, spec: Spec, cached: ProviderRating | null): Promise<ProviderRating> {
     if (this.cooling(spec.provider)) return this.unavailable(spec, cached);
+    const needsRefresh = this.states.get(key)?.needsRefresh;
     let received = false;
     try {
       const response = await this.options.upstream.request(spec.url, { background: true, maxBytes: 2 * 1024 * 1024, ...(spec.headers ? { headers: spec.headers } : {}), ...(spec.method ? { method: spec.method, body: spec.body } : {}) });
@@ -181,14 +183,14 @@ export class MultiRatingService {
       const value = spec.parse(response.bytes.toString('utf8')), fetchedAt = this.options.now().toISOString();
       const source: ProviderRating = { provider: spec.provider, ...value, maxScore: spec.maxScore, url: spec.link, fetchedAt, status: value.score === null ? 'unrated' : 'ready' };
       if (!validProviderRating(source)) throw new Error('评分来源响应无效');
-      try { await this.options.store.write(key, source, fetchedAt); } catch { source.error = '评分已更新，但缓存未保存。'; }
+      try { await this.options.store.write(key, spec.provider === 'filmarks' ? { ...source, filmarksCountsVersion: 1 } : source, fetchedAt); } catch { source.error = '评分已更新，但缓存未保存。'; }
       this.providerFailures.delete(spec.provider); this.remember(key, { source, retryUntil: 0 }); return source;
     } catch (error) {
       // Never surface upstream HTML/JSON (or credentials) in error messages.
       const source = this.unavailable(spec, cached);
       const retry = error instanceof UpstreamError && error.retryAt ? Math.max(60_000, error.retryAt - Date.now()) : 60_000;
       if (!received && providerFailure(error)) this.providerFailures.set(spec.provider, this.options.now().getTime() + retry);
-      this.remember(key, { source, retryUntil: this.options.now().getTime() + retry }); return source;
+      this.remember(key, { source, retryUntil: this.options.now().getTime() + retry, needsRefresh }); return source;
     }
   }
   close() { this.closed = true; clearTimeout(this.wake); for (const entry of this.queue.splice(0)) entry.reject(new Error('评分服务正在关闭。')); }

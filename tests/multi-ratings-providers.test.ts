@@ -66,8 +66,17 @@ describe('评分来源解析', () => {
     expect(() => parseAniListRating({ data: { Media: { id: 200, type: 'MANGA', averageScore: 81 } } }, 200)).toThrow();
     expect(() => parseAniListRating({ errors: [{ message: 'no' }], data: null }, 200)).toThrow();
   });
-  it('Filmarks仅提取对应作品JSON-LD聚合分，评论数不充当评分人数', () => {
-    expect(parseFilmarksRating(filmarks({ '@type': 'TVSeries', url: 'https://filmarks.com/animes/4998/6805', aggregateRating: { '@type': 'AggregateRating', ratingValue: 3.6, bestRating: 5, reviewCount: 270 } }), { seriesId: 4998, seasonId: 6805 })).toEqual({ score: 3.6, votes: null });
+  it.each([23, '23', 270, '1234'])('Filmarks读取对应作品聚合评分中的人数：%s', count => {
+    expect(parseFilmarksRating(filmarks({ '@type': 'TVSeries', url: 'https://filmarks.com/animes/4998/6805', aggregateRating: { '@type': 'AggregateRating', ratingValue: 3.6, bestRating: 5, reviewCount: count } }), { seriesId: 4998, seasonId: 6805 })).toEqual({ score: 3.6, votes: Number(count) });
+  });
+  it.each([undefined, null, '', -1, '1.5', 'unknown', true, '9007199254740992'])('Filmarks人数缺失或无效时保留分数，不伪造零人数：%s', count => {
+    expect(parseFilmarksRating(filmarks({ '@type': 'TVSeason', url: 'https://filmarks.com/animes/4998/6805', aggregateRating: { ratingValue: '3.6', bestRating: '5', reviewCount: count } }), { seriesId: 4998, seasonId: 6805 })).toEqual({ score: 3.6, votes: null });
+  });
+  it('Filmarks零人评分与缺少人数不同，忽略用户评论中的其他人数', () => {
+    expect(parseFilmarksRating(filmarks([
+      { '@type': 'Review', aggregateRating: { ratingValue: 5, bestRating: 5, reviewCount: 9999 } },
+      { '@type': 'TVSeason', url: 'https://filmarks.com/animes/4998/6805', aggregateRating: { ratingValue: 0, bestRating: 5, reviewCount: '0' } },
+    ]), { seriesId: 4998, seasonId: 6805 })).toEqual({ score: null, votes: 0 });
   });
   it('Filmarks未评分页面仅有正确作品面包屑时保留空分', () => {
     expect(parseFilmarksRating(filmarks({ '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', item: { '@id': 'https://filmarks.com/animes/4998/6805', name: '未评分作品' } }] }), { seriesId: 4998, seasonId: 6805 })).toEqual({ score: null, votes: null });

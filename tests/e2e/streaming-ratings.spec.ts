@@ -5,7 +5,7 @@ import type { RatingSummary } from '../../shared/scores';
 const sample: RatingSummary = { score: 8.3, count: 4, fetchedAt: '2026-10-29T04:00:00Z', sources: [
   { provider: 'bangumi', score: 8, maxScore: 10, votes: 1234, url: 'https://bgm.tv/subject/1', fetchedAt: null, status: 'ready' },
   { provider: 'mal', score: 8.2, maxScore: 10, votes: 2345, url: 'https://myanimelist.net/anime/1', fetchedAt: null, status: 'ready' },
-  { provider: 'filmarks', score: 4.2, maxScore: 5, votes: null, url: 'https://filmarks.com/animes/1/1', fetchedAt: null, status: 'ready' },
+  { provider: 'filmarks', score: 4.2, maxScore: 5, votes: 48, url: 'https://filmarks.com/animes/1/1', fetchedAt: null, status: 'ready' },
   { provider: 'anilist', score: 86, maxScore: 100, votes: 3456, url: 'https://anilist.co/anime/1', fetchedAt: null, status: 'ready' },
 ] };
 
@@ -45,7 +45,7 @@ test('综合评分在作品卡、主视觉与详情一致，四站保留各自�
   const ratings = page.getByRole('region', { name: '作品评分', exact: true });
   await expect(ratings.locator('.rating-source')).toHaveCount(4);
   await expect(ratings.locator('[data-provider="filmarks"]')).toContainText('4.2 / 5');
-  await expect(ratings.locator('[data-provider="filmarks"]')).toContainText('评分人数暂缺');
+  await expect(ratings.locator('[data-provider="filmarks"]')).toContainText('48 人评分');
   await expect(ratings.locator('[data-provider="anilist"]')).toContainText('86 / 100');
   await expect(ratings.locator('[data-provider="mal"]')).toContainText('2,345 人评分');
   await expect(page.locator('.detail-rating-row .rating-badge')).toContainText('8.3');

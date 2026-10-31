@@ -35,6 +35,12 @@ describe('跨页面评分展示', () => {
     ]);
   });
 
+  it('Filmarks评分人数按实际数值显示，保留自己的五分制', () => {
+    const rows = ratingSourceRows({ ...summary, sources: [{ ...summary.sources[2]!, votes: 1234 }] });
+    expect(rows[2]?.scoreLabel).toBe('4.2 / 5');
+    expect(rows[2]?.votesLabel).toBe('1,234 人评分');
+  });
+
   it('缺源仍保留四站位置，disabled 与故障不同，0 人不等于未知人数', () => {
     const rows = ratingSourceRows({ score: null, count: 0, fetchedAt: null, sources: [
       { ...summary.sources[0]!, score: null, votes: 0, status: 'unrated' },

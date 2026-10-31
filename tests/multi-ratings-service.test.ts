@@ -82,11 +82,50 @@ describe('跨站评分缓存服务', () => {
     }, { aniListEnabled: true, filmarksLink: () => ({ seriesId: 4998, seasonId: 6805 }) });
     const result = await service.get(item, bgm, true);
     expect(result).toMatchObject({ score: 7.8, count: 4 });
-    expect(result.sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, votes: null, maxScore: 5 });
+    expect(result.sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, votes: 23, maxScore: 5 });
     const aniListCall = calls.find(call => call.url === 'https://graphql.anilist.co/')!;
     expect(aniListCall.init?.method).toBe('POST');
     const query = JSON.parse(aniListCall.init?.body as string).query;
     expect(query).toContain('Media(id:200,type:ANIME)'); expect(query).toContain('averageScore');
+  });
+  it.each([23, null])('旧Filmarks人数缓存保留原分并只补取一次，解析后人数%s跨重启复用', async count => {
+    let calls = 0, release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const { service, store, dir, upstream } = await setup(async () => {
+      calls++; await gate;
+      return new Response(`<link rel="canonical" href="https://filmarks.com/animes/4998/6805"><script type="application/ld+json">${JSON.stringify({ '@type': 'TVSeason', url: 'https://filmarks.com/animes/4998/6805', aggregateRating: { ratingValue: '3.6', bestRating: '5', ...(count === null ? {} : { reviewCount: String(count) }) } })}</script>`);
+    }, { filmarksLink: () => ({ seriesId: 4998, seasonId: 6805 }) });
+    const filmItem = { id: 'bgm:1', bangumiId: 1 }, key = ratingCacheKey('filmarks', 'https://filmarks.com/animes/4998/6805');
+    await store.write(key, { provider: 'filmarks', score: 3.6, votes: null, maxScore: 5, url: 'https://filmarks.com/animes/4998/6805', fetchedAt: bgm.fetchedAt, status: 'ready' }, bgm.fetchedAt);
+    expect((await service.peek(filmItem, bgm)).sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, votes: null, fetchedAt: bgm.fetchedAt });
+    expect(calls).toBe(0);
+    const stale = await service.get(filmItem, bgm);
+    expect(stale.revalidating).toBe(true);
+    expect(stale.sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, fetchedAt: bgm.fetchedAt });
+    for (let index = 0; index < 5; index++) await service.get(filmItem, bgm);
+    await vi.waitFor(() => expect(calls).toBe(1)); release();
+    const updated = await service.get(filmItem, bgm, true);
+    expect(updated.sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, votes: count });
+    expect(updated.revalidating).not.toBe(true);
+    expect(Object.keys(updated.sources.find(source => source.provider === 'filmarks')!).sort()).toEqual(['fetchedAt', 'maxScore', 'provider', 'score', 'status', 'url', 'votes']);
+    await service.drain();
+    const restarted = new MultiRatingService({ store: new CacheStore(dir), upstream, now: () => new Date('2026-10-31T01:00:00Z'), aniListEnabled: false, filmarksLink: () => ({ seriesId: 4998, seasonId: 6805 }) }); services.push(restarted);
+    for (let index = 0; index < 5; index++) {
+      const result = await restarted.get(filmItem, bgm, true);
+      expect(result.sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, votes: count });
+      expect(result.revalidating).not.toBe(true);
+    }
+    expect(calls).toBe(1);
+  });
+  it('旧Filmarks人数缓存补取限流后保留分数及重试冷却', async () => {
+    let calls = 0;
+    const { service, store } = await setup(async () => { calls++; return new Response('', { status: 429, headers: { 'retry-after': '120' } }); }, { filmarksLink: () => ({ seriesId: 4998, seasonId: 6805 }) });
+    const filmItem = { id: 'bgm:1', bangumiId: 1 };
+    await store.write(ratingCacheKey('filmarks', 'https://filmarks.com/animes/4998/6805'), { provider: 'filmarks', score: 3.6, votes: null, maxScore: 5, url: 'https://filmarks.com/animes/4998/6805', fetchedAt: bgm.fetchedAt, status: 'ready' }, bgm.fetchedAt);
+    const failed = await service.get(filmItem, bgm, true);
+    expect(failed.sources.find(source => source.provider === 'filmarks')).toMatchObject({ score: 3.6, votes: null, error: expect.any(String) });
+    expect(failed.retryAfterMs).toBeGreaterThan(60_000);
+    await service.get(filmItem, bgm, true); expect(calls).toBe(1);
   });
   it('AniList不同作品的POST请求及持久缓存分别隔离且都参与综合分', async () => {
     vi.useFakeTimers(); const ids: number[] = [];
