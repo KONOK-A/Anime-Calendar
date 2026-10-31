@@ -1,18 +1,20 @@
 export type Timezone = 'Asia/Shanghai' | 'Asia/Tokyo';
 export interface Platform { name: string; url: string; regions: string[] }
 export interface AiringRule { anchor: string | null; frequency: 'once' | 'daily' | 'weekly' | 'unsupported' | 'unknown'; raw: string; end: string | null }
-export interface NetworkAiring { platform: string; regions: string[]; begin: string; rule: AiringRule; sourceUrl: string; rules?: AiringRule[]; note?: string }
+export type ReleaseKind = 'regular' | 'member-advance';
+export interface CandidateExclusion { sourceUrl: string; broadcast?: string }
+export interface NetworkAiring { platform: string; regions: string[]; begin: string; rule: AiringRule; sourceUrl: string; rules?: AiringRule[]; note?: string; releaseKind?: ReleaseKind }
 export interface Anime {
   id: string; bangumiId: number | null; title: string; originalTitle: string; aliases: string[];
   type: 'tv' | 'web'; begin: string; season: string; officialSite: string | null; externalIds?: { mal?: number; aniList?: number };
   platforms: Platform[]; rule: AiringRule; broadcastRule: AiringRule; networkAiring?: NetworkAiring; sourceUrl: string; scheduleNote?: string; scheduleSource?: string;
 }
-export interface EventOverride { animeId: string; originalAt?: string; at: string; status: 'scheduled' | 'cancelled'; sourceUrl: string; note?: string }
-export interface RuleOverride { animeId: string; broadcast?: string; broadcasts?: string[]; begin?: string; end?: string; dateOnly?: boolean; kind?: 'network' | 'broadcast'; platform?: string; regions?: string[]; sourceUrl: string; note: string }
+export interface EventOverride { animeId: string; originalAt?: string; at: string; status: 'scheduled' | 'cancelled'; sourceUrl: string; note?: string; releaseKind?: ReleaseKind }
+export interface RuleOverride { animeId: string; broadcast?: string; broadcasts?: string[]; begin?: string; end?: string; dateOnly?: boolean; kind?: 'network' | 'broadcast'; platform?: string; regions?: string[]; sourceUrl: string; note: string; releaseKind?: ReleaseKind; candidateExclusions?: CandidateExclusion[] }
 export interface Overrides { version: 1; active: { animeId: string; active: boolean; sourceUrl: string }[]; events: EventOverride[]; rules?: RuleOverride[] }
 export interface CatalogBase { items: Anime[]; warnings: string[] }
 export interface CatalogSnapshot extends CatalogBase {
-  schemaVersion: 1; schedulePolicy?: 'streaming'; activeIds: string[]; fetchedAt: { catalog: string | null; calendar: string | null }; overrides: Overrides;
+  schemaVersion: 1; schedulePolicy?: 'streaming'; streamingAccessPolicy?: 'exclude-member-advance-v1'; activeIds: string[]; fetchedAt: { catalog: string | null; calendar: string | null }; overrides: Overrides;
 }
 export interface AiringEvent { animeId: string; at: string; basis: 'estimated' | 'source' | 'official'; status: 'scheduled' | 'cancelled'; sourceUrl: string; note?: string }
 export interface AnimeRating { score: number; total: number; rank: number | null }

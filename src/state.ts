@@ -6,7 +6,7 @@ import { useTheme } from './theme';
 import { useBrowseState } from './browse';
 import type { CatalogColumns, WeeklyLayout } from './presentation';
 import { DataCache, type CachedData } from './data-cache';
-import { isAnimeDetail, isCatalogView } from './data-validation';
+import { isAnimeDetail, isCatalogView, isCurrentCatalogView } from './data-validation';
 import { catalogRequests, type CatalogRequest } from './catalog-requests';
 import { createSeasonRatings, ratingItemIdentity, ratingMatchesItem } from './season-ratings';
 import { summarizeRatings, validRatingSummary, type RatingSummary } from '../shared/scores';
@@ -121,7 +121,7 @@ export function createAppState() {
           if (isCatalogView(value)) Object.assign(error, { appStatus: value.status });
           throw error;
         }
-        if (!isCatalogView(value) || !value.catalog) throw new Error('页面资料格式无效，请稍后重试。');
+        if (!isCurrentCatalogView(value)) throw new Error('页面资料格式无效，请稍后重试。');
         const scope = value.scope, wanted = request.scope;
         if (scope.type !== wanted.type || scope.key !== wanted.key) throw new Error('页面资料范围不匹配，请重试。');
         return { data: value, etag: response.headers.get('etag') };
@@ -144,7 +144,7 @@ export function createAppState() {
     if (seeded && catalog.value) catalog.value = { ...catalog.value, items: seedItems };
     loading.value = !catalog.value; viewError.value = null; unresolvedIds.value = []; missingIds.value = [];
     if (!requests.length) { loading.value = false; return; }
-    const cached = await Promise.all(requests.map(request => cache.read('views', request.scope.key, (value): value is CatalogView => isCatalogView(value) && value.catalog?.schedulePolicy === 'streaming')));
+    const cached = await Promise.all(requests.map(request => cache.read<CatalogView>('views', request.scope.key, isCurrentCatalogView)));
     if (!current()) return;
     const available = cached.flatMap(entry => entry?.data.catalog ? [entry.data] : []);
     if (available.length) applyViews(available, true, retainCollection ? (catalog.value?.items ?? []).filter(item => favorites.value.includes(item.id)) : seedItems);

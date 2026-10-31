@@ -87,9 +87,11 @@
       "note": "官网：10月3日22:00日本时间起地上波一周先行；首日第1、2话同时上线。采用22:00最早VOD，ABEMA免费频道22:30是另一口径。"
     },
     {
-      "animeId": "bgm:537738", "kind": "network", "broadcast": "R/2026-10-08T15:30:00Z/P7D",
-      "platform": "ABEMAプレミアム", "regions": ["JP"], "sourceUrl": "https://toaru-project.com/item/onair/index.html",
-      "note": "官网：ABEMA Premium从10月8日24:30日本时间先配。10月3日23:00只是第1话实时限定超先行，不据此生成周六周播。"
+      "animeId": "bgm:537738", "kind": "network", "broadcast": "R/2026-10-09T15:30:00Z/P7D",
+      "platform": "ABEMA", "regions": ["JP"], "sourceUrl": "https://toaru-project.com/item/onair/",
+      "releaseKind": "regular",
+      "candidateExclusions": [{ "sourceUrl": "https://abema.tv/video/title/199-61", "broadcast": "R/2026-10-08T15:30:00Z/P7D" }],
+      "note": "官网：ABEMA常规配信为日本周五24:30，即北京时间周五23:30、日本周六00:30。10月3日23:00日本时间仅第1话实时限定先行，不作为周播规则。"
     },
     {
       "animeId": "bgm:625799", "kind": "network", "broadcast": "R/2026-10-06T15:30:00Z/P7D",
@@ -147,9 +149,11 @@
       "animeId": "bgm:584847",
       "kind": "network",
       "sourceUrl": "https://chiramune.com/onair/",
-      "note": "官网第2cour：ABEMA Premium/dAnime每周二24:30日本时间正式配信，即北京周二23:30；采用网络周期，非AT-X更早电视时间。U-NEXT每周五24:30后发。",
+      "note": "官网第2cour：dアニメストア每周二24:30日本时间常规配信，即北京时间周二23:30、日本周三00:30。",
       "broadcast": "R/2026-10-13T15:30:00Z/P7D",
-      "platform": "ABEMA Premium / dアニメストア",
+      "platform": "dアニメストア",
+      "releaseKind": "regular",
+      "candidateExclusions": [{ "sourceUrl": "https://abema.tv/video/title/675-8", "broadcast": "R/2026-10-13T15:30:00Z/P7D" }],
       "regions": [
         "JP"
       ]

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { AiringRule, Anime, CatalogBase, NetworkAiring } from '../shared/types.js';
+import type { AiringRule, Anime, CatalogBase, NetworkAiring, RuleOverride } from '../shared/types.js';
 import { seasonFrom } from '../shared/schedule.js';
+import { isEligibleNetwork } from '../shared/airing-policy.js';
 
 export function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 export function safeUrl(value: unknown): string | null {
@@ -38,7 +39,7 @@ export function parseNetworkRule(broadcast: string, begin: string, end: string, 
   return { ...rule, end: new Date(cutoff).toISOString() };
 }
 
-export function normalizeCatalog(input: unknown): CatalogBase {
+export function normalizeCatalog(input: unknown, overrides: readonly RuleOverride[] = []): CatalogBase {
   if (!isRecord(input) || !isRecord(input.siteMeta) || !Array.isArray(input.items) || !input.items.length) throw new Error('目录响应结构无效，旧数据已保留');
   const meta = input.siteMeta;
   const items: Anime[] = [], warnings: string[] = [], ids = new Set<string>();
@@ -77,6 +78,7 @@ export function normalizeCatalog(input: unknown): CatalogBase {
     const chinese = Array.isArray(translate['zh-Hans']) ? translate['zh-Hans'].find(x => typeof x === 'string' && x.trim()) : null;
     const begin = text(raw.begin), premiere = instant(begin), broadcastRule = parseRule(text(raw.broadcast), begin, text(raw.end));
     const candidates: NetworkAiring[] = [];
+    let excludedNetwork = false;
     const platforms = sites.flatMap(site => {
       const entry = meta[String(site.site)];
       if (!isRecord(entry) || entry.type !== 'onair') return [];
@@ -86,22 +88,30 @@ export function normalizeCatalog(input: unknown): CatalogBase {
       const regions = Array.isArray(site.regions) ? site.regions : Array.isArray(entry.regions) ? entry.regions : [];
       const name = site.site === 'gamer' ? '巴哈姆特动画疯（台湾）' : site.site === 'gamer_hk' ? '巴哈姆特动画疯（港澳）' : text(entry.title) || text(site.site);
       const platform = { name, url, regions: regions.filter((x): x is string => typeof x === 'string') };
+      const releaseKind = site.releaseKind === 'regular' || site.releaseKind === 'member-advance' ? site.releaseKind : undefined;
       const rawPeriod = text(site.broadcast);
       const rule = parseNetworkRule(rawPeriod, text(site.begin), text(site.end), begin, broadcastRule);
       const networkBegin = instant(site.begin) ?? rule.anchor;
+      const eligible = isEligibleNetwork(id, { sourceUrl: url, rule, releaseKind }, overrides);
+      if (!eligible) excludedNetwork = true;
       if (rawPeriod.startsWith('R/') && rule.anchor && networkBegin && rule.frequency !== 'unknown') {
         const distance = premiere ? Math.abs(Date.parse(networkBegin) - Date.parse(premiere)) : 0;
         const olderSeason = premiere && Math.max(Date.parse(networkBegin), Date.parse(rule.anchor)) < Date.parse(premiere) - 183 * 86_400_000;
         const reused = olderSeason || sharedAnchors.get(airingKey(site, rule.anchor))?.some(other => Math.abs(Date.parse(networkBegin) - other) < distance);
         if (reused) warnings.push(`${id} ${platform.name} 的周期疑似来自共用播放页的旧季，未采用。`);
-        else candidates.push({ platform: platform.name, regions: platform.regions, begin: networkBegin, rule, sourceUrl: url });
+        else {
+          const candidate: NetworkAiring = { platform: platform.name, regions: platform.regions, begin: networkBegin, rule, sourceUrl: url, ...(releaseKind ? { releaseKind } : {}) };
+          if (eligible) candidates.push(candidate);
+        }
       }
       return [platform];
     });
     // A Web animation's own explicit release rule describes its network release.
     // A TV rule remains a separate reference when no streaming time is known.
-    if (!candidates.length && raw.type === 'web' && broadcastRule.anchor) {
-      candidates.push({ platform: '官方网络发行', regions: [], begin: premiere ?? broadcastRule.anchor, rule: { ...broadcastRule }, sourceUrl: officialSite ?? (bangumiId ? `https://bgm.tv/subject/${bangumiId}` : 'https://github.com/bangumi-data/bangumi-data') });
+    if (!candidates.length && (!excludedNetwork || raw.releaseKind === 'regular') && raw.type === 'web' && broadcastRule.anchor) {
+      const releaseKind = raw.releaseKind === 'regular' || raw.releaseKind === 'member-advance' ? raw.releaseKind : undefined;
+      const candidate: NetworkAiring = { platform: '官方网络发行', regions: [], begin: premiere ?? broadcastRule.anchor, rule: { ...broadcastRule }, sourceUrl: officialSite ?? (bangumiId ? `https://bgm.tv/subject/${bangumiId}` : 'https://github.com/bangumi-data/bangumi-data'), ...(releaseKind ? { releaseKind } : {}) };
+      if (isEligibleNetwork(id, candidate, overrides)) candidates.push(candidate);
     }
     const networkAiring = candidates.sort((a, b) => Date.parse(a.begin) - Date.parse(b.begin))[0];
     items.push({ id, bangumiId, title: typeof chinese === 'string' ? chinese : originalTitle, originalTitle, aliases: [...new Set([originalTitle, ...translations])], type: raw.type, begin, season: seasonFrom(begin), officialSite, platforms, rule: networkAiring?.rule ?? { anchor: null, frequency: 'unknown', raw: '', end: null }, broadcastRule: { ...broadcastRule }, ...(networkAiring ? { networkAiring } : {}), ...(Object.keys(externalIds).length ? { externalIds } : {}), sourceUrl: bangumiId ? `https://bgm.tv/subject/${bangumiId}` : 'https://github.com/bangumi-data/bangumi-data' });

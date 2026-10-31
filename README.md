@@ -29,7 +29,7 @@ Windows 完成首次安装与构建后，后续可直接双击项目中的 `star
 
 ## 数据与许可
 
-排期采用已收录的网络配信时间，缺少可信时刻时列为待定；实际更新和地区限制以官方为准。
+排期采用已收录的常规网络配信时间，缺少可信时刻时列为待定；实际更新和地区限制以官方为准。
 
 目录来自 [bangumi-data](https://github.com/bangumi-data/bangumi-data)（[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)），经过筛选与修正；作品资料来自 [Bangumi API](https://github.com/bangumi/api)。
 

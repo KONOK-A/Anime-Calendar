@@ -1,10 +1,11 @@
-import type { AiringRule, CatalogBase } from '../shared/types.js';
+import type { AiringRule, CatalogBase, ReleaseKind, RuleOverride } from '../shared/types.js';
 import { instant, isRecord, parseNetworkRule, parseRule, safeUrl } from './normalize.js';
+import { isEligibleNetwork } from '../shared/airing-policy.js';
 
 export const STREAMING_SOURCE_URL = 'https://www.video.unext.jp/season_anime/autumn';
 export interface StreamingScheduleRecord {
   title: string; season: string; begin: string; premiereDate: string | null; premiereAt: string | null; rule: AiringRule; rules?: AiringRule[];
-  platform: string; regions: string[]; sourceUrl: string; note: string; animeId?: string;
+  platform: string; regions: string[]; sourceUrl: string; note: string; animeId?: string; releaseKind?: ReleaseKind;
 }
 export interface StreamingSchedulePage { season: string; records: StreamingScheduleRecord[] }
 const DAY = 86_400_000;
@@ -39,6 +40,7 @@ export function normalizeStreamingData(input: unknown): StreamingSchedulePage {
     if (!isRecord(record) || record.season !== input.season || typeof record.title !== 'string' || !record.title.trim() || !publisherUrl(record.sourceUrl) || typeof record.platform !== 'string' || !record.platform.trim() || !Array.isArray(record.regions) || !record.regions.every(region => typeof region === 'string') || typeof record.note !== 'string' || !validRule(record.rule)) throw new Error('官方网络缓存条目无效，旧数据已保留');
     if (!(record.begin === '' || calendarDate(record.begin) || instant(record.begin)) || !(record.premiereDate === null || calendarDate(record.premiereDate)) || !(record.premiereAt === null || instant(record.premiereAt))) throw new Error('官方网络首发日期无效，旧数据已保留');
     if (record.animeId !== undefined && (typeof record.animeId !== 'string' || !/^(?:bgm:\d+|bd:[a-f\d]{24})$/.test(record.animeId))) throw new Error('官方网络作品ID无效');
+    if (record.releaseKind !== undefined && record.releaseKind !== 'regular' && record.releaseKind !== 'member-advance') throw new Error('官方网络配信分类无效');
     if (record.rules !== undefined && (!Array.isArray(record.rules) || !record.rules.length || !record.rules.every(validRule))) throw new Error('官方网络多周期无效，旧数据已保留');
   }
   return structuredClone(input) as unknown as StreamingSchedulePage;
@@ -93,7 +95,7 @@ export function normalizeStreamingSchedulePage(input: unknown, sourceUrl = STREA
 }
 
 /** Merge verified publisher records before manual overrides; no network access or cache mutation. */
-export function applyStreamingSchedules(base: CatalogBase, records: StreamingScheduleRecord[]): CatalogBase {
+export function applyStreamingSchedules(base: CatalogBase, records: StreamingScheduleRecord[], overrides: readonly RuleOverride[] = []): CatalogBase {
   const warnings = [...base.warnings];
   const matches = new Map<string, StreamingScheduleRecord[]>();
   for (const record of records) {
@@ -101,13 +103,27 @@ export function applyStreamingSchedules(base: CatalogBase, records: StreamingSch
     const key = titleKey(record.title);
     const candidates = base.items.filter(anime => anime.season === record.season && (record.animeId ? anime.id === record.animeId : [anime.originalTitle, anime.title, ...anime.aliases].some(title => titleKey(title) === key)));
     if (candidates.length !== 1) continue;
-    const id = candidates[0]!.id, existing = matches.get(id) ?? [];
-    matches.set(id, [...existing, record]);
+    const id = candidates[0]!.id;
+    const original = record.rules ?? [record.rule];
+    const rules = original.filter(rule => isEligibleNetwork(id, { sourceUrl: record.sourceUrl, rule, releaseKind: record.releaseKind }, overrides));
+    if (!rules.length) continue;
+    const primary = rules.find(rule => rule.raw === record.rule.raw);
+    const replacement = primary ?? rules.find(rule => rule.frequency === record.rule.frequency) ?? rules[0]!;
+    const premiere = instant(record.premiereAt);
+    const independentPremiere = premiere !== null && rules.some(rule => rule.frequency === 'once' && instant(rule.anchor) === premiere);
+    const declaredStart = premiere ?? instant(record.begin);
+    const removedStart = declaredStart !== null && (original.some(rule => instant(rule.anchor) === declaredStart && !rules.includes(rule)) || !isEligibleNetwork(id, { sourceUrl: record.sourceUrl, releaseKind: record.releaseKind, rule: { anchor: declaredStart, frequency: 'once', raw: `R/${declaredStart}/P0D`, end: null } }, overrides));
+    const filtered: StreamingScheduleRecord = {
+      ...record, rule: replacement, ...(record.rules ? { rules } : {}),
+      ...(!primary || removedStart ? { begin: independentPremiere ? record.premiereAt! : '', premiereDate: independentPremiere ? record.premiereDate : null, premiereAt: independentPremiere ? record.premiereAt : null } : {}),
+    };
+    const existing = matches.get(id) ?? [];
+    matches.set(id, [...existing, filtered]);
   }
   const items = base.items.map(anime => {
     const candidates = matches.get(anime.id);
     if (!candidates?.length || anime.scheduleSource) return anime;
-    const record = candidates.sort((a, b) => Date.parse(a.begin) - Date.parse(b.begin))[0]!;
+    const record = candidates.sort((a, b) => Date.parse(a.begin || a.rule.anchor || '') - Date.parse(b.begin || b.rule.anchor || ''))[0]!;
     const rule = instant(record.begin) ? parseNetworkRule(record.rule.raw, record.begin, record.rule.end ?? '', anime.begin, anime.broadcastRule) : { ...record.rule };
     const previous = anime.networkAiring;
     const interval = rule.frequency === 'weekly' ? 7 * DAY : rule.frequency === 'daily' ? DAY : 0;
@@ -115,7 +131,7 @@ export function applyStreamingSchedules(base: CatalogBase, records: StreamingSch
     const conflict = previous && (previous.rule.frequency !== rule.frequency || (interval ? difference % interval !== 0 : difference !== 0));
     const note = conflict ? `${record.note}；来源冲突：采用官方网络排期，聚合规则 ${previous.rule.raw}（${previous.sourceUrl}）供核对。` : record.note;
     if (conflict) warnings.push(`来源冲突：${anime.title}（${anime.id}）采用官方网络排期；原平台 ${previous.sourceUrl}。`);
-    return { ...anime, rule, networkAiring: { platform: record.platform, regions: record.regions, begin: record.begin, rule, ...(record.rules ? { rules: record.rules.map(entry => ({ ...entry, end: entry.end ?? (entry.frequency === 'weekly' ? rule.end : null) })) } : {}), sourceUrl: record.sourceUrl, note }, scheduleNote: note };
+    return { ...anime, rule, networkAiring: { platform: record.platform, regions: record.regions, begin: record.begin, rule, ...(record.rules ? { rules: record.rules.map(entry => ({ ...entry, end: entry.end ?? (entry.frequency === 'weekly' ? rule.end : null) })) } : {}), sourceUrl: record.sourceUrl, note, ...(record.releaseKind ? { releaseKind: record.releaseKind } : {}) }, scheduleNote: note };
   });
   return { items, warnings: [...new Set(warnings)] };
 }

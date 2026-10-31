@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnimeService } from '../server/service.js';
 import { CacheStore } from '../server/cache.js';
 import { normalizeStreamingData, normalizeStreamingSchedulePage } from '../server/streaming-sources.js';
-import { buildSchedule } from '../shared/schedule.js';
+import { buildSchedule, dateKey, formatClock } from '../shared/schedule.js';
 import { rawCalendar, rawCatalog } from './fixtures.js';
 
 const directories: string[] = [], services: AnimeService[] = [];
@@ -37,6 +37,43 @@ async function setup(options: { time?: { value: string }; clock?: number; overri
 }
 
 describe('官方网络排期服务接合', () => {
+  it('暗部采用ABEMA常规配信，日本周六零点对应北京时间周五深夜', async () => {
+    const data = JSON.parse(await readFile(new URL('../data/overrides.json', import.meta.url), 'utf8'));
+    const correction = data.rules.find((rule: { animeId: string }) => rule.animeId === 'bgm:537738');
+    expect(correction).toBeDefined();
+    const { service } = await setup({ overrides: { version: 1, active: [], events: [], rules: [{ ...correction, animeId: 'bgm:1' }] } });
+    const item = service.item('bgm:1')!;
+    expect(item.networkAiring?.platform).toBe('ABEMA');
+    expect(item.networkAiring?.releaseKind).toBe('regular');
+    expect(item.scheduleSource).toBe('https://toaru-project.com/item/onair/');
+    expect(item.scheduleNote).not.toMatch(/会员|免费|Premium/);
+    const events = buildSchedule(service.catalog()!, currentWeek);
+    expect(events.map(event => event.at)).toEqual(['2026-10-30T15:30:00.000Z']);
+    expect(events[0]!.sourceUrl).toBe('https://toaru-project.com/item/onair/');
+    expect(dateKey(events[0]!.at, 'Asia/Shanghai')).toBe('2026-10-30');
+    expect(formatClock(events[0]!.at, 'Asia/Shanghai')).toBe('23:30');
+    expect(dateKey(events[0]!.at, 'Asia/Tokyo')).toBe('2026-10-31');
+    expect(formatClock(events[0]!.at, 'Asia/Tokyo')).toBe('00:30');
+    expect(events).toHaveLength(1);
+  });
+  it('千岁君保留dAnime常规配信时间并使用单一平台标签', async () => {
+    const data = JSON.parse(await readFile(new URL('../data/overrides.json', import.meta.url), 'utf8'));
+    const correction = data.rules.find((rule: { animeId: string }) => rule.animeId === 'bgm:584847');
+    expect(correction).toBeDefined();
+    const { service } = await setup({ overrides: { version: 1, active: [], events: [], rules: [{ ...correction, animeId: 'bgm:1' }] } });
+    const item = service.item('bgm:1')!;
+    expect(item.networkAiring?.platform).toBe('dアニメストア');
+    expect(item.networkAiring?.releaseKind).toBe('regular');
+    expect(item.scheduleSource).toBe('https://chiramune.com/onair/');
+    expect(item.scheduleNote).not.toMatch(/会员|免费|Premium/);
+    const events = buildSchedule(service.catalog()!, currentWeek);
+    expect(events.map(event => event.at)).toEqual(['2026-10-27T15:30:00.000Z']);
+    expect(events[0]!.sourceUrl).toBe('https://chiramune.com/onair/');
+    expect(dateKey(events[0]!.at, 'Asia/Shanghai')).toBe('2026-10-27');
+    expect(formatClock(events[0]!.at, 'Asia/Shanghai')).toBe('23:30');
+    expect(dateKey(events[0]!.at, 'Asia/Tokyo')).toBe('2026-10-28');
+    expect(formatClock(events[0]!.at, 'Asia/Tokyo')).toBe('00:30');
+  });
   it('自动失败退避保留种子，手动刷新可在来源恢复后立即重试', async () => {
     const sourceFailure = { value: true };
     const { service, officialReads } = await setup({ sourceFailure });

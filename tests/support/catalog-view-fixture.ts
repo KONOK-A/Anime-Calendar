@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { AppStatus, CatalogScope, CatalogSnapshot, CatalogView } from '../../shared/types';
+import { STREAMING_ACCESS_POLICY } from '../../shared/airing-policy';
 
 /** Wire fixture for existing visual/error scenarios; these tests assert literal UI outcomes. */
 export function catalogViewFixture(url: string, catalog: CatalogSnapshot, status?: AppStatus): CatalogView {
@@ -13,7 +14,7 @@ export function catalogViewFixture(url: string, catalog: CatalogSnapshot, status
   else { const ids = [...new Set((parsed.searchParams.get('ids') ?? '').split(',').filter(Boolean))].sort(); scope = { type: 'items', ids, key: `items:${ids.join(',')}` }; }
   const counts = new Map<string, number>(); for (const item of catalog.items) counts.set(item.season, (counts.get(item.season) ?? 0) + 1);
   const view: CatalogView = {
-    schemaVersion: 1, scope, revision: 'fixed-test-catalog', catalog,
+    schemaVersion: 1, scope, revision: 'fixed-test-catalog', catalog: { schedulePolicy: 'streaming', streamingAccessPolicy: STREAMING_ACCESS_POLICY, ...catalog },
     seasons: [...counts].map(([season, total]) => ({ season, total })),
     status: status ?? { appId: 'anime-calendar', version: '1.0.0', refreshing: false, hasCatalog: true, sources: { catalog: { fetchedAt: catalog.fetchedAt.catalog, error: null }, calendar: { fetchedAt: catalog.fetchedAt.calendar, error: null } }, warnings: catalog.warnings },
   };

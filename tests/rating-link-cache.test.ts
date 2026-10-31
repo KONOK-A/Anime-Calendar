@@ -17,7 +17,7 @@ const summary = (linked: boolean) => ({ id: 'bgm:1', ...summarizeRatings([
 function view(linked: boolean): CatalogView {
   const base = normalizeCatalog(rawCatalog), at = new Date().toISOString();
   if (linked) base.items[0]!.externalIds = links;
-  return { schemaVersion: 1, scope: { type: 'season', season: '2026-4', key: 'season:2026-4' }, revision: linked ? 'linked' : 'old', seasons: [{ season: '2026-4', total: 2 }], status: { appId: 'anime-calendar', version: '1.0.0', refreshing: false, hasCatalog: true, warnings: [], sources: { catalog: { fetchedAt: at, error: null }, calendar: { fetchedAt: at, error: null } } }, catalog: { ...base, schemaVersion: 1, schedulePolicy: 'streaming', activeIds: ['bgm:1'], fetchedAt: { catalog: at, calendar: at }, overrides: { version: 1, active: [], events: [] } } };
+  return { schemaVersion: 1, scope: { type: 'season', season: '2026-4', key: 'season:2026-4' }, revision: linked ? 'linked' : 'old', seasons: [{ season: '2026-4', total: 2 }], status: { appId: 'anime-calendar', version: '1.0.0', refreshing: false, hasCatalog: true, warnings: [], sources: { catalog: { fetchedAt: at, error: null }, calendar: { fetchedAt: at, error: null } } }, catalog: { ...base, schemaVersion: 1, schedulePolicy: 'streaming', streamingAccessPolicy: 'exclude-member-advance-v1', activeIds: ['bgm:1'], fetchedAt: { catalog: at, calendar: at }, overrides: { version: 1, active: [], events: [] } } };
 }
 function storage() {
   const stores = new Map<string, Map<string, Response>>();
@@ -38,6 +38,39 @@ function setup() {
   app.mount({}); cleanups.push(() => app.unmount());
   return { state, io };
 }
+
+describe('常规网络排期的页面缓存隔离', () => {
+  it('已标记常规排期的持久缓存，在断网时仍能恢复', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    const { state, io } = setup(), current = view(false);
+    const cached = await io.open('anime-calendar:views:v1');
+    await cached.put(new Request('http://127.0.0.1/__anime_calendar_cache__/v1/views/season%3A2026-4'), Response.json({ schemaVersion: 1, savedAt: Date.now(), etag: '"regular"', data: current }));
+    await state.loadPage('#/season/2026/4');
+    expect(state.catalog.value?.items[0]?.id).toBe('bgm:1');
+    await vi.waitFor(() => expect(state.viewError.value).toContain('重试'));
+  });
+  it('已有 streaming 标记但缺少常规排期政策的持久缓存，在断网时不能恢复', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
+    const { state, io } = setup(), legacy = view(false);
+    delete legacy.catalog!.streamingAccessPolicy;
+    legacy.catalog!.items[0]!.title = '旧会员抢先排期不能展示';
+    const cached = await io.open('anime-calendar:views:v1');
+    const key = new Request('http://127.0.0.1/__anime_calendar_cache__/v1/views/season%3A2026-4');
+    await cached.put(key, Response.json({ schemaVersion: 1, savedAt: Date.now(), etag: '"legacy-member"', data: legacy }));
+    await state.loadPage('#/season/2026/4');
+    expect(state.catalog.value).toBeNull();
+    expect(state.loading.value).toBe(false);
+    expect(state.viewError.value).toContain('重试');
+    expect(await cached.match(key)).toBeUndefined();
+  });
+  it('缺少常规排期政策的新响应不能重新展示旧会员排期', async () => {
+    const legacy = view(false); delete legacy.catalog!.streamingAccessPolicy;
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(legacy)));
+    const { state } = setup(); await state.loadPage('#/season/2026/4');
+    expect(state.catalog.value).toBeNull();
+    expect(state.viewError.value).toContain('格式无效');
+  });
+});
 
 describe('评分关联变化后的页面缓存', () => {
   it('同标签页原未关联评分不会在目录补齐ID后被24小时内存缓存锁住', async () => {

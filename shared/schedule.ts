@@ -1,4 +1,5 @@
 import type { AiringEvent, CatalogSnapshot, Timezone } from './types.js';
+import { isEligibleNetwork, isMemberAdvance } from './airing-policy.js';
 
 const DAY = 86_400_000;
 const offsets: Record<Timezone, number> = { 'Asia/Shanghai': 8, 'Asia/Tokyo': 9 };
@@ -35,8 +36,9 @@ export function buildSchedule(snapshot: CatalogSnapshot, window: { start: string
   const active = effectiveActiveIds(snapshot);
   const events: AiringEvent[] = [];
   const eventKeys = new Set<string>();
-  const overrides = snapshot.overrides.events;
+  const overrides = snapshot.overrides.events.filter(event => !isMemberAdvance(event));
   for (const anime of snapshot.items) {
+    if (isMemberAdvance(anime.networkAiring)) continue;
     const rules = anime.networkAiring?.rules?.length ? anime.networkAiring.rules : [anime.rule];
     for (const rule of rules) {
       const { anchor, frequency } = rule;
@@ -44,6 +46,7 @@ export function buildSchedule(snapshot: CatalogSnapshot, window: { start: string
       const first = Date.parse(anchor), final = rule.end ? Date.parse(rule.end) : Infinity;
       const interval = frequency === 'weekly' ? 7 * DAY : frequency === 'daily' ? DAY : 0;
       if (interval && !active.has(anime.id)) continue;
+      if (!isEligibleNetwork(anime.id, { rule, sourceUrl: anime.networkAiring?.sourceUrl ?? anime.scheduleSource ?? anime.sourceUrl, releaseKind: anime.networkAiring?.releaseKind }, snapshot.overrides.rules)) continue;
       let time = interval ? first + Math.max(0, Math.ceil((start - first) / interval)) * interval : first;
       while (time < end && time <= final) {
         const overridden = overrides.some(x => x.animeId === anime.id && Date.parse(x.originalAt ?? x.at) === time);

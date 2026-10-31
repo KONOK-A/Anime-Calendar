@@ -14,6 +14,7 @@ import { adaptationFromTags } from '../shared/adaptation.js';
 import { MultiRatingService, type BangumiRatingState } from './multi-ratings.js';
 import { summarizeRatings, type RatingSummary } from '../shared/scores.js';
 import { applyRatingLinks, normalizeRatingLinks, type RatingLink } from './rating-links.js';
+import { isEligibleNetwork, isMemberAdvance, STREAMING_ACCESS_POLICY } from '../shared/airing-policy.js';
 import { applyStreamingSchedules, mergeStreamingRecords, normalizeStreamingData, normalizeStreamingSchedulePage, type StreamingScheduleRecord } from './streaming-sources.js';
 
 interface Options { directory: string; now?: () => Date; fetcher?: (url: string, init?: RequestInit) => Promise<Response>; overridesPath?: string; observe?: (event: Record<string, unknown>) => void; ratings?: { malClientId?: string; aniListEnabled?: boolean } }
@@ -41,11 +42,16 @@ function metadata(input: unknown, id: number): Metadata {
 function readOverrides(input: unknown): Overrides {
   if (!isRecord(input) || input.version !== 1 || !Array.isArray(input.active) || !Array.isArray(input.events) || (input.rules !== undefined && !Array.isArray(input.rules))) throw new Error('人工修正格式无效');
   for (const entry of input.active) if (!isRecord(entry) || typeof entry.animeId !== 'string' || typeof entry.active !== 'boolean' || !safeUrl(entry.sourceUrl)) throw new Error('在播修正缺少作品ID、状态或来源');
-  for (const entry of input.events) if (!isRecord(entry) || typeof entry.animeId !== 'string' || !instant(entry.at) || !['scheduled', 'cancelled'].includes(String(entry.status)) || !safeUrl(entry.sourceUrl) || (entry.originalAt !== undefined && !instant(entry.originalAt))) throw new Error('单次排期修正缺少有效时间或来源');
+  for (const entry of input.events) {
+    if (!isRecord(entry) || typeof entry.animeId !== 'string' || !instant(entry.at) || !['scheduled', 'cancelled'].includes(String(entry.status)) || !safeUrl(entry.sourceUrl) || (entry.originalAt !== undefined && !instant(entry.originalAt))) throw new Error('单次排期修正缺少有效时间或来源');
+    if (entry.releaseKind !== undefined && entry.releaseKind !== 'regular' && entry.releaseKind !== 'member-advance') throw new Error('单次排期配信类别无效');
+  }
   for (const entry of (input.rules ?? []) as unknown[]) {
-    if (!isRecord(entry) || typeof entry.animeId !== 'string' || !safeUrl(entry.sourceUrl) || typeof entry.note !== 'string' || !(typeof entry.broadcast === 'string' || entry.dateOnly === true || entry.kind === 'broadcast')) throw new Error('周期修正缺少规则或来源');
+    if (!isRecord(entry) || typeof entry.animeId !== 'string' || !safeUrl(entry.sourceUrl) || typeof entry.note !== 'string' || !(typeof entry.broadcast === 'string' || entry.dateOnly === true || entry.kind === 'broadcast' || Array.isArray(entry.candidateExclusions) && entry.candidateExclusions.length > 0)) throw new Error('周期修正缺少规则或来源');
     if (entry.kind !== undefined && !['network', 'broadcast'].includes(String(entry.kind))) throw new Error('不支持的排期修正类型');
-    if (entry.kind === 'network' && (typeof entry.broadcast !== 'string' || !instant(entry.broadcast.split('/')[1]) || typeof entry.platform !== 'string' || !entry.platform.trim())) throw new Error('网络排期修正缺少周期或平台');
+    if (entry.releaseKind !== undefined && entry.releaseKind !== 'regular' && entry.releaseKind !== 'member-advance') throw new Error('网络配信类别无效');
+    if (entry.candidateExclusions !== undefined && (!Array.isArray(entry.candidateExclusions) || !entry.candidateExclusions.length || entry.candidateExclusions.length > 32 || !entry.candidateExclusions.every(value => isRecord(value) && safeUrl(value.sourceUrl) && (value.broadcast === undefined || typeof value.broadcast === 'string' && value.broadcast.startsWith('R/') && instant(value.broadcast.split('/')[1]))))) throw new Error('网络候选排除记录无效');
+    if (entry.kind === 'network' && (entry.broadcast !== undefined || !Array.isArray(entry.candidateExclusions)) && (typeof entry.broadcast !== 'string' || !instant(entry.broadcast.split('/')[1]) || typeof entry.platform !== 'string' || !entry.platform.trim())) throw new Error('网络排期修正缺少周期或平台');
     if (entry.regions !== undefined && (!Array.isArray(entry.regions) || !entry.regions.every(x => typeof x === 'string'))) throw new Error('网络地区格式无效');
     if (entry.broadcasts !== undefined && (!Array.isArray(entry.broadcasts) || entry.broadcasts.length > 14 || !entry.broadcasts.every(value => typeof value === 'string' && instant(value.split('/')[1])))) throw new Error('补充网络周期无效');
     if (entry.begin !== undefined && entry.begin !== '' && !instant(entry.begin) && !(typeof entry.begin === 'string' && /^\d{4}-\d\d-\d\d$/.test(entry.begin))) throw new Error('网络首发日期无效');
@@ -109,12 +115,12 @@ export class AnimeService {
     });
   }
   async initialize(): Promise<void> {
-    const [catalog, calendar] = await Promise.all([this.store.read('catalog', normalizeCatalog), this.store.read('calendar', normalizeCalendar)]);
+    try { this.overrides = readOverrides(JSON.parse(await readFile(this.options.overridesPath ?? join(dirname(this.options.directory), 'data', 'overrides.json'), 'utf8'))); }
+    catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) this.issues.set('overrides', `人工修正未加载：${error instanceof Error ? error.message : '未知错误'}`); }
+    const [catalog, calendar] = await Promise.all([this.store.read('catalog', raw => normalizeCatalog(raw, this.overrides.rules)), this.store.read('calendar', normalizeCalendar)]);
     if (catalog) { this.base = catalog.data; this.sources.catalog.fetchedAt = catalog.fetchedAt; }
     if (calendar) { this.activeIds = calendar.data; this.sources.calendar.fetchedAt = calendar.fetchedAt; }
     for (const [key, value] of [['catalog', catalog], ['calendar', calendar]] as const) if (value) { this.sourceRaw.set(key, value.raw); if (value.validators) this.validators.set(key, value.validators); }
-    try { this.overrides = readOverrides(JSON.parse(await readFile(this.options.overridesPath ?? join(dirname(this.options.directory), 'data', 'overrides.json'), 'utf8'))); }
-    catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) this.issues.set('overrides', `人工修正未加载：${error instanceof Error ? error.message : '未知错误'}`); }
     const dataDirectory = dirname(this.options.overridesPath ?? join(dirname(this.options.directory), 'data', 'overrides.json'));
     try {
       const links = normalizeRatingLinks(JSON.parse(await readFile(join(dataDirectory, 'rating-links.json'), 'utf8')));
@@ -133,10 +139,10 @@ export class AnimeService {
     const at = this.now().getTime();
     if (this.snapshot && at >= this.snapshotAt && at < this.nextBoundary) return this.snapshot;
     const rules = new Map(this.overrides.rules?.map(rule => [rule.animeId, rule]));
-    const streamingBase = this.snapshot ? null : applyStreamingSchedules(this.base, this.streamingRecords);
+    const streamingBase = this.snapshot ? null : applyStreamingSchedules(this.base, this.streamingRecords, this.overrides.rules);
     const items = this.snapshot?.items ?? applyRatingLinks(streamingBase!.items, this.ratingLinks, this.ratingLinkWarnings = []).map(anime => {
       const override = rules.get(anime.id);
-      if (!override) return anime;
+      if (!override || isMemberAdvance(override) || !override.broadcast && !override.dateOnly && override.kind !== 'broadcast') return anime;
       const item: Anime = { ...anime, rule: { ...anime.rule }, broadcastRule: { ...anime.broadcastRule }, scheduleNote: override.note, scheduleSource: override.sourceUrl };
       if (override.kind === 'broadcast') { item.rule = { anchor: null, frequency: 'unknown', raw: '', end: null }; delete item.networkAiring; }
       if (typeof override.broadcast === 'string') {
@@ -145,9 +151,15 @@ export class AnimeService {
       }
       if (override.kind === 'network') {
         const extra = override.broadcasts?.map(raw => parseNetworkRule(raw, raw.split('/')[1], override.end ?? '', item.begin, item.broadcastRule));
-        const rules = extra ? [item.rule, ...extra] : undefined;
-        const begin = override.begin ?? (rules ?? [item.rule]).flatMap(rule => rule.anchor ? [rule.anchor] : []).sort()[0] ?? '';
-        item.networkAiring = { platform: override.platform!, regions: override.regions ?? [], begin, rule: item.rule, sourceUrl: override.sourceUrl, ...(rules ? { rules } : {}) };
+        const primary = item.rule, original = [primary, ...(extra ?? [])], eligible = original.filter(rule => isEligibleNetwork(anime.id, { rule, sourceUrl: override.sourceUrl, releaseKind: override.releaseKind }, this.overrides.rules));
+        if (!eligible.length) return anime;
+        item.rule = eligible[0]!;
+        const rules = extra ? eligible : undefined;
+        const knownPremiere = !!override.begin && eligible.some(rule => rule.frequency === 'once' && Date.parse(rule.anchor ?? '') === Date.parse(override.begin!));
+        const declaredStart = instant(override.begin);
+        const removedStart = declaredStart !== null && (original.some(rule => rule.anchor === declaredStart && !eligible.includes(rule)) || !isEligibleNetwork(anime.id, { sourceUrl: override.sourceUrl, releaseKind: override.releaseKind, rule: { anchor: declaredStart, frequency: 'once', raw: `R/${declaredStart}/P0D`, end: null } }, this.overrides.rules));
+        const begin = (item.rule !== primary || removedStart) && !knownPremiere ? '' : override.begin ?? (rules ?? [item.rule]).flatMap(rule => rule.anchor ? [rule.anchor] : []).sort()[0] ?? '';
+        item.networkAiring = { platform: override.platform!, regions: override.regions ?? [], begin, rule: item.rule, sourceUrl: override.sourceUrl, ...(override.releaseKind ? { releaseKind: override.releaseKind } : {}), ...(rules ? { rules } : {}) };
       }
       if (override.dateOnly) { item.begin = /^\d{4}-\d\d-\d\d$/.test(item.begin) ? item.begin : dateKey(item.begin, 'Asia/Tokyo'); item.rule = { ...item.rule, anchor: null, frequency: 'unknown', raw: '' }; delete item.networkAiring; }
       return item;
@@ -160,7 +172,7 @@ export class AnimeService {
     }
     this.snapshotAt = at;
     this.byId.clear(); for (const item of items) this.byId.set(item.id, item);
-    return this.snapshot = { schemaVersion: 1, schedulePolicy: 'streaming', items, warnings, activeIds: this.activeIds, overrides: this.overrides, fetchedAt: { catalog: this.sources.catalog.fetchedAt, calendar: this.sources.calendar.fetchedAt } };
+    return this.snapshot = { schemaVersion: 1, schedulePolicy: 'streaming', streamingAccessPolicy: STREAMING_ACCESS_POLICY, items, warnings, activeIds: this.activeIds, overrides: this.overrides, fetchedAt: { catalog: this.sources.catalog.fetchedAt, calendar: this.sources.calendar.fetchedAt } };
   }
   item(id: string): Anime | undefined { this.catalog(); return this.byId.get(id); }
   epoch(): string { this.catalog(); return `${this.statusVersion}:${this.store.revision}:${this.posters.revision}:${this.snapshotAt}`; }
@@ -186,7 +198,7 @@ export class AnimeService {
         if (previous?.lastModified) headers['if-modified-since'] = previous.lastModified;
         const response = await this.upstream.request(source === 'catalog' ? CATALOG_URL : CALENDAR_URL, { timeoutMs: 60_000, maxBytes: source === 'catalog' ? 16 * 1024 * 1024 : 4 * 1024 * 1024, background: mode === 'stale', headers });
         const raw = response.status === 304 ? this.sourceRaw.get(source) : JSON.parse(response.bytes.toString('utf8')) as unknown;
-        const normalized = source === 'catalog' ? normalizeCatalog(raw) : normalizeCalendar(raw);
+        const normalized = source === 'catalog' ? normalizeCatalog(raw, this.overrides.rules) : normalizeCalendar(raw);
         const at = this.now().toISOString(), validators = { etag: response.headers.get('etag') ?? previous?.etag, lastModified: response.headers.get('last-modified') ?? previous?.lastModified };
         try { await this.store.write(source, raw, at, validators); this.issues.delete(`source-${source}`); } catch { this.issues.set(`source-${source}`, `来源 ${source} 已更新，但缓存未保存。`); }
         if (source === 'catalog') this.base = normalized as CatalogBase; else this.activeIds = normalized as string[];
