@@ -120,12 +120,13 @@ test('跨周后所选日期自动进入新周，不会隐藏整张窄屏番表',
   await expect(page.locator('.day-column.mobile-selected')).toHaveAttribute('data-day', '2026-11-02');
 });
 
-test('网络先行使用周六网络时段，详情同时显示所选平台与原放送参考', async ({ page }, testInfo) => {
+test('采用周六网络时段，卡片展示作品来源，详情保留平台与原放送参考', async ({ page }, testInfo) => {
   if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: '星期六', exact: false }).click();
   const saturday = page.locator('.day-column[data-day="2026-10-31"]');
   await expect(saturday.getByRole('link', { name: '查看网络先行作品详情' })).toBeVisible();
   await expect(saturday.getByText('20:00', { exact: true })).toBeVisible();
-  await expect(saturday.locator('.event-footnote')).toContainText('网络先行');
+  await expect(saturday.locator('.event-footnote')).toHaveCount(0);
+  await expect(saturday.locator('.card-adaptation')).toHaveText('小说改');
   await expect(page.locator('.day-column[data-day="2026-10-26"]').getByRole('link', { name: '查看网络先行作品详情' })).toHaveCount(0);
   await saturday.getByRole('link', { name: '查看网络先行作品详情' }).click();
   await expect(page.getByText('采用平台', { exact: true })).toBeVisible();

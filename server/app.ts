@@ -82,6 +82,11 @@ export function createApp(service: AnimeService, staticDirectory: string, option
   });
   app.get('/api/catalog', (_req, res) => { const data = service.catalog(); res.status(data ? 200 : 503).json(data ?? { error: '尚无可用目录，请等待首次获取或手动重试。' }); });
   app.get('/api/anime/:id', async (req, res) => { const data = await service.detail(req.params.id, req.query.wait === '1'); res.status(data ? 200 : 404).json(data ?? { error: '当前目录未收录该作品。' }); });
+  app.get('/api/anime/:id/ratings', async (req, res) => {
+    if (!/^(bgm:\d+|bd:[\w-]+)$/.test(req.params.id)) { res.status(400).json({ error: '作品ID无效。' }); return; }
+    const data = await service.ratings(req.params.id, req.query.wait === '1');
+    res.status(data ? 200 : 404).json(data ? { id: req.params.id, ...data } : { error: '当前目录未收录该作品。' });
+  });
   app.get('/api/anime/:id/credits', async (req, res) => { const data = await service.credits(req.params.id, req.query.wait === '1'); res.status(data ? 200 : 404).json(data ?? { error: '当前目录未收录该作品。' }); });
   app.get('/api/anime/:id/character-names', async (req, res) => {
     const raw = req.query.offset ?? '0';
@@ -115,7 +120,7 @@ export function createApp(service: AnimeService, staticDirectory: string, option
   }
   app.use((error: Error & { status?: number; statusCode?: number; type?: string }, req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (res.headersSent) { next(error); return; }
-    const status = error.type === 'entity.parse.failed' ? 400 : error.type === 'entity.too.large' ? 413 : error.status === 415 ? 415 : 500;
+    const status = error.type === 'entity.parse.failed' || (error instanceof URIError && error.status === 400) ? 400 : error.type === 'entity.too.large' ? 413 : error.type === 'charset.unsupported' || error.type === 'encoding.unsupported' ? 415 : 500;
     options.observe?.({ event: 'request_error', requestId: res.getHeader('X-Request-ID'), method: req.method, route: String(req.route?.path ?? '/api'), status, errorType: error.type ?? error.name });
     res.status(status).json({ error: status === 400 ? '请求格式无效。' : status === 413 ? '请求内容过大。' : status === 415 ? '请求编码不受支持。' : publicOrigin ? '服务处理失败，请稍后重试。' : '本地服务处理失败，请查看启动窗口。' });
   });

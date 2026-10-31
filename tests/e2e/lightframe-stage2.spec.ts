@@ -31,7 +31,7 @@ test('阶段二：目录复用带内框的海报卡，三档密度均保留原�
     await page.getByRole('button', { name: `每行显示${columns}部`, exact: true }).click();
     await expect.poll(() => grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(columns);
     const card = grid.locator('[data-anime-id="bgm:1"]');
-    await expect(card.getByLabel('Bangumi评分 7.8', { exact: true })).toBeVisible();
+    await expect(card.getByLabel('综合评分 7.8 / 10', { exact: true })).toBeVisible();
     await expect(card.locator('.original-title')).toBeVisible();
     await expect(card.getByRole('button', { name: '追番星旅', exact: true })).toBeVisible();
     const inset = await card.evaluate(element => element.querySelector('.poster-frame')!.getBoundingClientRect().left - element.getBoundingClientRect().left);

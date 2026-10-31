@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SeasonRatingService } from '../server/season-ratings.js';
 import type { Anime, AnimeDetail } from '../shared/types';
+import { summarizeRatings, type RatingSummary } from '../shared/scores';
 const items = Array.from({ length: 5 }, (_, index) => ({ id: `bgm:${index + 1}`, bangumiId: index + 1, season: '2026-4' }) as Anime);
 const detail = (id: string) => ({ id, rating: { score: Number(id.split(':')[1]) + 5, total: 10, rank: null }, detailFetchedAt: '2026-10-30T00:00:00Z', detailError: null }) as AnimeDetail;
+const summary = (score: number, revalidating = false): RatingSummary => summarizeRatings([{ provider: 'filmarks', score: score / 2, maxScore: 5, votes: null, url: null, fetchedAt: '2026-10-30T00:00:00Z', status: 'ready' }], undefined, revalidating);
 afterEach(() => vi.useRealTimers());
 describe('按需季度评分摘要', () => {
   it('同季度并发读取复用任务，至多两部并行，只返回评分不返回详情', async () => {
@@ -50,5 +52,32 @@ describe('按需季度评分摘要', () => {
     await new Promise(resolve => setTimeout(resolve, 30));
     try { expect(() => service.get('ninth', items.slice(0, 2))).toThrow(); expect(service.get('empty', [])).toMatchObject({ status: 'ready', total: 0 }); }
     finally { releases.forEach(release => release()); await service.drain(); }
+  });
+  it('先发布整季可用综合分，来源更新以完整快照一起替换', async () => {
+    vi.useFakeTimers(); const calls = new Map<string, number>(), releases = new Map<string, () => void>();
+    const service = new SeasonRatingService(async id => detail(id), () => new Date(), { summary: async id => {
+      const count = (calls.get(id) ?? 0) + 1; calls.set(id, count);
+      if (count === 1) return summary(id === 'bgm:1' ? 6 : 7, true);
+      await new Promise<void>(resolve => releases.set(id, resolve)); return summary(id === 'bgm:1' ? 9 : 8);
+    } });
+    service.get('2026-4', items.slice(0, 2));
+    await vi.waitFor(() => expect(service.get('2026-4', items.slice(0, 2))).toMatchObject({ status: 'loading', processed: 2, entries: [expect.objectContaining({ summary: expect.objectContaining({ score: 6 }) }), expect.objectContaining({ summary: expect.objectContaining({ score: 7 }) })] }));
+    await vi.advanceTimersByTimeAsync(1000);
+    releases.get('bgm:1')!(); await Promise.resolve();
+    expect(service.get('2026-4', items.slice(0, 2)).entries.map(entry => entry.summary?.score)).toEqual([6, 7]);
+    releases.get('bgm:2')!(); await service.drain();
+    expect(service.get('2026-4', items.slice(0, 2))).toMatchObject({ status: 'ready', entries: [expect.objectContaining({ summary: expect.objectContaining({ score: 9 }) }), expect.objectContaining({ summary: expect.objectContaining({ score: 8 }) })] });
+  });
+  it('禁用或未关联的缺源不阻塞完成，未知人数的有效分仍保留', async () => {
+    const value = summary(8.6); value.sources.push({ provider: 'anilist', score: null, maxScore: 100, votes: null, url: null, fetchedAt: null, status: 'disabled' });
+    const service = new SeasonRatingService(async id => detail(id), () => new Date(), { summary: async () => value });
+    service.get('2026-4', items.slice(0, 1)); await service.drain();
+    expect(service.get('2026-4', items.slice(0, 1))).toMatchObject({ status: 'ready', entries: [expect.objectContaining({ summary: expect.objectContaining({ score: 8.6, count: 1 }), error: null })] });
+  });
+  it('预算结束保留完整综合分快照，后台未完成允许稍后重试', async () => {
+    const service = new SeasonRatingService(async id => detail(id), () => new Date(), { budgetMs: 20, summary: async () => summary(8.6, true) });
+    service.get('2026-4', items.slice(0, 1)); await new Promise(resolve => setTimeout(resolve, 30));
+    expect(service.get('2026-4', items.slice(0, 1))).toMatchObject({ status: 'partial', processed: 1, entries: [expect.objectContaining({ summary: expect.objectContaining({ score: 8.6 }), error: expect.any(String) })] });
+    service.close(); await service.drain();
   });
 });

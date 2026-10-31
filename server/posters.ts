@@ -33,12 +33,17 @@ export class PosterStore {
   private readonly downloads = new Map<string, Promise<PosterData>>();
   private readonly cooldowns = new Map<string, { until: number; error: Error }>();
   private readonly touches = new Map<string, number>();
-  private readonly writingBlobs = new Set<string>();
+  private diskTask: Promise<void> = Promise.resolve();
   private readonly problems = new Set<string>();
   revision = 0;
   constructor(private readonly directory: string, private readonly upstream: UpstreamClient, private readonly resolve: (id: string, size: PosterSize) => Promise<string | null>) {}
   get warnings() { return [...this.problems]; }
   private problem(value: boolean) { const message = '部分封面缓存未保存，当前图片仍可显示。'; if (value && !this.problems.has(message)) { this.problems.add(message); this.revision++; } else if (!value && this.problems.delete(message)) this.revision++; }
+  private mutate(action: () => Promise<void>): Promise<void> {
+    const task = this.diskTask.then(action);
+    this.diskTask = task.catch(() => {});
+    return task;
+  }
   get(id: string, size: string): Promise<PosterData> {
     if (!['thumb', 'card', 'hero'].includes(size)) return Promise.reject(new PosterError('封面尺寸无效。', 400));
     if (!/^(bgm:\d+|bd:[\w-]+)$/.test(id) || id.length >= 120) return Promise.reject(new PosterError('作品ID无效。', 400));
@@ -105,20 +110,24 @@ export class PosterStore {
       }
       const blob = hash(bytes), descriptor: Descriptor = { version: 1, blob, contentType, checkedAt: Date.now(), originEtag: response.headers.get('etag') ?? cached?.descriptor.originEtag, lastModified: response.headers.get('last-modified') ?? cached?.descriptor.lastModified };
       let cache: PosterData['cache'] = 'miss';
-      this.writingBlobs.add(blob);
       try {
-        await mkdir(this.directory, { recursive: true });
-        await atomicWrite(join(this.directory, `${blob}.bin`), bytes);
-        await atomicWrite(join(this.directory, `${key}.json`), JSON.stringify(descriptor)); this.problem(false);
+        await this.mutate(async () => {
+          await mkdir(this.directory, { recursive: true });
+          await atomicWrite(join(this.directory, `${blob}.bin`), bytes);
+          await atomicWrite(join(this.directory, `${key}.json`), JSON.stringify(descriptor)); this.problem(false);
+        });
       } catch { cache = 'memory'; this.problem(true); }
       this.cooldowns.delete(key);
       await this.maintain().catch(() => this.problem(true));
-      this.writingBlobs.delete(blob);
       return { bytes, contentType, etag: `"${blob}"`, cache };
     }
     throw new PosterError('封面重定向无效。', 502);
   }
-  async maintain({ maxBytes = 512 * 1024 * 1024, now = Date.now() } = {}) {
+  maintain(options: { maxBytes?: number; now?: number } = {}) {
+    // A sweep must not observe a blob before its descriptor has been committed.
+    return this.mutate(() => this.sweep(options));
+  }
+  private async sweep({ maxBytes = 512 * 1024 * 1024, now = Date.now() } = {}) {
     let files; try { files = await readdir(this.directory, { withFileTypes: true }); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
     const entries: { path: string; blob: string; at: number; size: number; key: string }[] = [], blobs = new Map<string, number>();
     for (const file of files) if (file.isFile() && /^[a-f0-9]{64}\.bin$/.test(file.name)) blobs.set(file.name.slice(0, -4), (await stat(join(this.directory, file.name))).size);
@@ -127,15 +136,17 @@ export class PosterStore {
       const path = join(this.directory, file.name);
       try { const descriptor = JSON.parse(await readFile(path, 'utf8')) as Descriptor; if (/^[a-f0-9]{64}$/.test(descriptor.blob)) entries.push({ path, blob: descriptor.blob, at: (await stat(path)).mtimeMs, size: blobs.get(descriptor.blob) ?? 0, key }); } catch { /* Damaged metadata is replaced only after a valid download. */ }
     }
-    const retained = new Set(this.writingBlobs);
-    let remaining = maxBytes - [...retained].reduce((sum, blob) => sum + (blobs.get(blob) ?? 0), 0);
+    const retained = new Set<string>();
+    let remaining = maxBytes;
     for (const entry of entries.sort((a, b) => b.at - a.at)) {
       if (now - entry.at <= 30 * DAY && (retained.has(entry.blob) || entry.size <= remaining)) {
         if (!retained.has(entry.blob)) { retained.add(entry.blob); remaining -= entry.size; }
       } else { await unlink(entry.path).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); this.touches.delete(entry.key); }
     }
-    // Blobs for currently-writing descriptors are never removed by a concurrent sweep.
-    for (const blob of blobs.keys()) if (!retained.has(blob) && !this.writingBlobs.has(blob)) await unlink(join(this.directory, `${blob}.bin`)).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
+    for (const blob of blobs.keys()) if (!retained.has(blob)) await unlink(join(this.directory, `${blob}.bin`)).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
   }
-  async drain() { await Promise.allSettled([...this.requests.values(), ...this.downloads.values()]); }
+  async drain() {
+    do { await Promise.allSettled([...this.requests.values(), ...this.downloads.values()]); } while (this.requests.size || this.downloads.size);
+    await this.diskTask;
+  }
 }

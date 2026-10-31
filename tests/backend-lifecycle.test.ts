@@ -1,3 +1,4 @@
+import { listenTestServer } from './support/listen.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { shutdown } from '../server/shutdown.js';
@@ -7,7 +8,7 @@ describe('退出与运行观测', () => {
   it('允许活动响应和缓存写入完成，再停止资源服务', async () => {
     let send!: () => void, written!: () => void;
     const server = createServer((_req, res) => { send = () => res.end('done'); });
-    server.listen(0, '127.0.0.1'); await new Promise<void>(resolve => server.once('listening', resolve));
+    await listenTestServer(server);
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('port');
     const response = fetch(`http://127.0.0.1:${address.port}`);
     while (!send) await new Promise(resolve => setTimeout(resolve, 1));
@@ -17,7 +18,7 @@ describe('退出与运行观测', () => {
     written(); expect(await operation).toBe(true); expect(stop).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1);
   });
   it('达到截止时间后终止仍然等待的资源并强关连接', async () => {
-    const server = createServer(); server.listen(0, '127.0.0.1'); await new Promise<void>(resolve => server.once('listening', resolve));
+    const server = createServer(); await listenTestServer(server);
     const close = vi.fn(), force = vi.spyOn(server, 'closeAllConnections');
     expect(await shutdown(server, { drain: () => new Promise(() => {}), close }, () => {}, 20)).toBe(false);
     expect(force).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1);

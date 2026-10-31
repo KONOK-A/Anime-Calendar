@@ -1,5 +1,5 @@
 /** One scheduler for JSON and image traffic; a task owns its deadline, not its HTTP callers. */
-export interface RequestOptions { kind?: 'json' | 'image'; background?: boolean; timeoutMs?: number; maxBytes?: number; headers?: Record<string, string>; redirect?: RequestInit['redirect'] }
+export interface RequestOptions { kind?: 'json' | 'image'; background?: boolean; timeoutMs?: number; maxBytes?: number; headers?: Record<string, string>; redirect?: RequestInit['redirect']; method?: 'GET' | 'POST'; body?: string }
 export interface UpstreamResponse { status: number; headers: Headers; bytes: Buffer }
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 export class UpstreamError extends Error {
@@ -21,9 +21,9 @@ export class UpstreamClient {
 
   request(url: string, options: RequestOptions = {}): Promise<UpstreamResponse> {
     if (this.closed) return Promise.reject(new UpstreamError('上游服务正在关闭', 503));
-    const key = `${url}|${JSON.stringify(options.headers ?? {})}`;
+    const key = JSON.stringify([options.method ?? 'GET', url, options.headers ?? {}, options.body ?? null]);
     const pending = this.tasks.get(key);
-    if (pending) { if (!options.background) this.promote(url); return pending.promise; }
+    if (pending) { if (!options.background) { pending.options.background = false; this.pump(); } return pending.promise; }
     const now = Date.now(), retryAt = this.cooldowns.get(new URL(url).origin) ?? 0;
     if (retryAt > now) return Promise.reject(new UpstreamError('上游限流冷却中，请稍后重试', 503, retryAt));
     if (this.queue.length >= 128) return Promise.reject(new UpstreamError('请求队列繁忙，请稍后重试', 503));
@@ -51,7 +51,7 @@ export class UpstreamClient {
   }
   private pump() {
     clearTimeout(this.wake); this.wake = undefined;
-    while (!this.closed && this.active < 2) {
+    while (!this.closed && this.active < 4) {
       const now = Date.now();
       const eligible = this.queue.filter(task => task.available <= now && (!task.options.background || this.background < 1) && (task.options.kind !== 'image' || this.images < 1));
       const task = (this.foregroundRuns >= 8 ? eligible.find(task => task.options.background) : undefined) ?? eligible.find(task => !task.options.background) ?? eligible[0];
@@ -74,7 +74,7 @@ export class UpstreamClient {
       if (retryAt > Date.now()) throw new UpstreamError('上游限流冷却中，请稍后重试', 503, retryAt);
       this.observe({ event: 'upstream_start', source: new URL(task.url).hostname, queueMs: Date.now() - task.started, kind: task.options.kind ?? 'json' });
       const operation = (async () => {
-        const response = await this.fetcher(task.url, { headers: { accept: task.options.kind === 'image' ? 'image/*' : 'application/json', 'user-agent': 'anime-calendar/1.0.0', ...task.options.headers }, signal: task.controller.signal, redirect: task.options.redirect });
+        const response = await this.fetcher(task.url, { method: task.options.method ?? 'GET', ...(task.options.body === undefined ? {} : { body: task.options.body }), headers: { accept: task.options.kind === 'image' ? 'image/*' : 'application/json', 'user-agent': 'anime-calendar/1.0.0', ...task.options.headers }, signal: task.controller.signal, redirect: task.options.redirect });
         if (task.controller.signal.aborted) { void response.body?.cancel(); task.controller.signal.throwIfAborted(); }
         if (!response.ok && response.status !== 304 && !(task.options.redirect === 'manual' && response.status >= 300 && response.status < 400)) {
           void response.body?.cancel();

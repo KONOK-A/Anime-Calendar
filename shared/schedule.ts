@@ -34,19 +34,27 @@ export function buildSchedule(snapshot: CatalogSnapshot, window: { start: string
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 14 * DAY) throw new Error('排期窗口须为14天以内的有效区间');
   const active = effectiveActiveIds(snapshot);
   const events: AiringEvent[] = [];
+  const eventKeys = new Set<string>();
   const overrides = snapshot.overrides.events;
   for (const anime of snapshot.items) {
-    const { anchor, frequency } = anime.rule;
-    if (!anchor || frequency === 'unknown' || frequency === 'unsupported') continue;
-    const first = Date.parse(anchor), final = anime.rule.end ? Date.parse(anime.rule.end) : Infinity;
-    const interval = frequency === 'weekly' ? 7 * DAY : frequency === 'daily' ? DAY : 0;
-    if (interval && !active.has(anime.id)) continue;
-    let time = interval ? first + Math.max(0, Math.ceil((start - first) / interval)) * interval : first;
-    while (time < end && time <= final) {
-      const overridden = overrides.some(x => x.animeId === anime.id && Date.parse(x.originalAt ?? x.at) === time);
-      if (time >= start && !overridden) events.push({ animeId: anime.id, at: new Date(time).toISOString(), basis: interval ? 'estimated' : 'source', status: 'scheduled', sourceUrl: anime.scheduleSource ?? anime.networkAiring?.sourceUrl ?? anime.sourceUrl });
-      if (!interval) break;
-      time += interval;
+    const rules = anime.networkAiring?.rules?.length ? anime.networkAiring.rules : [anime.rule];
+    for (const rule of rules) {
+      const { anchor, frequency } = rule;
+      if (!anchor || frequency === 'unknown' || frequency === 'unsupported') continue;
+      const first = Date.parse(anchor), final = rule.end ? Date.parse(rule.end) : Infinity;
+      const interval = frequency === 'weekly' ? 7 * DAY : frequency === 'daily' ? DAY : 0;
+      if (interval && !active.has(anime.id)) continue;
+      let time = interval ? first + Math.max(0, Math.ceil((start - first) / interval)) * interval : first;
+      while (time < end && time <= final) {
+        const overridden = overrides.some(x => x.animeId === anime.id && Date.parse(x.originalAt ?? x.at) === time);
+        const key = `${anime.id}|${time}`;
+        if (time >= start && !overridden && !eventKeys.has(key)) {
+          events.push({ animeId: anime.id, at: new Date(time).toISOString(), basis: interval ? 'estimated' : 'source', status: 'scheduled', sourceUrl: anime.scheduleSource ?? anime.networkAiring?.sourceUrl ?? anime.sourceUrl });
+          eventKeys.add(key);
+        }
+        if (!interval) break;
+        time += interval;
+      }
     }
   }
   const ids = new Set(snapshot.items.map(x => x.id));

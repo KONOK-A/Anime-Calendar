@@ -5,7 +5,7 @@ import { AnimeService } from '../../dist/server/server/service.js';
 import { createApp } from '../../dist/server/server/app.js';
 
 const directory = await mkdtemp(join(tmpdir(), 'anime-calendar-e2e-'));
-const item = (id, title, original, broadcast, begin, type = 'tv') => ({ title: original, titleTranslate: { 'zh-Hans': [title, `${title}别名`] }, type, lang: 'ja', officialSite: 'https://example.com', begin, broadcast, end: '', sites: [{ site: 'bangumi', id: String(id) }, { site: 'bilibili', id: String(id) }] });
+const item = (id, title, original, broadcast, begin, type = 'tv') => ({ title: original, titleTranslate: { 'zh-Hans': [title, `${title}别名`] }, type, lang: 'ja', officialSite: 'https://example.com', begin, broadcast, end: '', sites: [{ site: 'bangumi', id: String(id) }, { site: 'bilibili', id: String(id), begin, broadcast }] });
 const catalog = { siteMeta: { bangumi: { type: 'info' }, bilibili: { title: '哔哩哔哩', type: 'onair', urlTemplate: 'https://www.bilibili.com/bangumi/media/md{{id}}', regions: ['CN'] } }, items: [
   item(1, '星旅', '星の旅', 'R/2026-10-26T15:30:00Z/P7D', '2026-09-30T16:30:00Z'),
   item(2, '放课后的音符', '放課後のノート', 'R/2026-10-29T12:00:00Z/P7D', '2026-10-01T12:00:00Z'),
@@ -30,7 +30,7 @@ const service = new AnimeService({ directory, now: () => new Date('2026-10-29T04
   } else if (url.endsWith('/characters')) {
     const id = Number(url.split('/').at(-2));
     value = id === 1 ? Array.from({ length: 10 }, (_, index) => ({ id: index + 100, name: `原名${index}`, relation: index === 0 ? '主角' : '配角', actors: index === 7 ? [] : [{ id: index + 200, name: `声优${index}` }] })) : [];
-  } else if (url.includes('/subjects/')) { const id = Number(url.split('/').at(-1)); value = { id, name: `作品${id}`, name_cn: '', summary: '这是测试中的作品简介，用来验证详情、收藏和平台链接。' + (id === 1 ? '\r\n\r\n[简介原文]\r\nこれは折りたたむ原文です。' : ''), images: { large: 'http://127.0.0.1:4321/missing-cover.jpg' }, eps: 12, rating: id === 1 ? { score: 7.8, total: 1234, rank: 321 } : id >= 1000 && id <= 1024 && id !== 1002 ? { score: id === 1024 ? 9.9 : 6 + (id % 3) / 10, total: 100, rank: 0 } : { score: 0, total: 0, rank: 0 }, tags: [{ name: '青春' }, { name: '日常' }], infobox: id === 1 ? [{ key: '音乐', value: '音乐家丁' }] : [] }; }
+  } else if (url.includes('/subjects/')) { const id = Number(url.split('/').at(-1)); value = { id, name: `作品${id}`, name_cn: '', summary: '这是测试中的作品简介，用来验证详情、收藏和平台链接。' + (id === 1 ? '\r\n\r\n[简介原文]\r\nこれは折りたたむ原文です。' : ''), images: { large: 'http://127.0.0.1:4321/missing-cover.jpg' }, eps: 12, rating: id === 1 ? { score: 7.8, total: 1234, rank: 321 } : id >= 1000 && id <= 1024 && id !== 1002 ? { score: id === 1024 ? 9.9 : 6 + (id % 3) / 10, total: 100, rank: 0 } : { score: 0, total: 0, rank: 0 }, tags: [{ name: '青春' }, { name: '日常' }, ...(id === 5 ? [{ name: '小说改', count: 20 }] : [])], infobox: id === 1 ? [{ key: '音乐', value: '音乐家丁' }] : [] }; }
   else value = url.includes('/calendar') ? calendar : catalog;
   return new Response(JSON.stringify(value), { status: 200 });
 } });

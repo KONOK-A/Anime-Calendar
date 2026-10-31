@@ -3,11 +3,13 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { buildSchedule, dateKey, formatClock, weekWindow } from '../../shared/schedule';
 import { featuredEvents, initialFeatured } from '../presentation';
 import { useAppState } from '../state';
+import { resolveRatingSummary } from '../rating-display';
 import { animateSaved, useMotionScope, usePointerLight } from '../motion';
 import SceneBackdrop from './SceneBackdrop.vue';
 import Poster from './Poster.vue';
 import { posterSource } from '../poster-source';
 import Icon from './Icon.vue';
+import RatingBadge from './RatingBadge.vue';
 
 const state = useAppState(), selected = ref(''), element = ref<HTMLElement>(), saveButton = ref<HTMLElement>();
 const active = useMotionScope(element), pointer = usePointerLight(element, () => active.value);
@@ -21,6 +23,7 @@ watch([todayKey, candidateKeys], (value, previous) => {
 const event = computed(() => candidates.value.find(x => x.animeId === selected.value));
 const anime = computed(() => state.catalog.value?.items.find(x => x.id === selected.value));
 const detail = computed(() => state.details.get(selected.value));
+const ratingSummary = computed(() => resolveRatingSummary(undefined, state.ratingSummaries.get(selected.value), detail.value?.rating, anime.value?.sourceUrl ?? '', detail.value?.detailFetchedAt));
 const index = computed(() => candidates.value.findIndex(x => x.animeId === selected.value));
 const saved = computed(() => state.favorites.value.includes(selected.value));
 const imageFailed = ref(false);
@@ -55,11 +58,11 @@ const titleDuration = computed(() => state.appearance.reducedMotion.value ? 0 : 
       <p class="frame-eyebrow"><span class="frame-airing-mark" /><span>今日放送</span><i />{{ date }}</p>
       <div class="frame-title-stage">
         <Transition name="frame-copy" appear :duration="titleDuration" @before-leave="leaveTitle" @before-enter="enterTitle">
-          <div v-if="anime" :key="anime.id" class="hero-work"><h2><a class="frame-title-link" :href="`#/anime/${anime.id}`" :title="anime.title">{{ anime.title }}</a></h2><p v-if="anime.originalTitle !== anime.title" class="frame-original">{{ anime.originalTitle }}</p></div>
+          <div v-if="anime" :key="anime.id" class="hero-work hero-work-rated"><div class="hero-title-rating"><h2><a class="frame-title-link" :href="`#/anime/${anime.id}`" :title="anime.title">{{ anime.title }}</a></h2><div class="hero-rating-slot"><RatingBadge v-if="ratingSummary?.score != null" :summary="ratingSummary" variant="hero" /></div></div><p v-if="anime.originalTitle !== anime.title" class="frame-original">{{ anime.originalTitle }}</p></div>
           <div v-else class="hero-work frame-empty"><h2>今日暂无参考排期</h2></div>
         </Transition>
       </div>
-      <div v-if="anime && event" class="frame-airing"><time :datetime="event.at">{{ formatClock(event.at, state.timezone.value) }}</time><span>{{ anime.networkAiring ? '网络先行' : '日本放送参考' }}</span><span v-if="event.basis !== 'estimated'" class="frame-basis">{{ event.basis === 'official' ? '公告排期' : '来源排期' }}</span></div>
+      <div v-if="anime && event" class="frame-airing"><time :datetime="event.at">{{ formatClock(event.at, state.timezone.value) }}</time><span>{{ anime.networkAiring ? '网络配信' : '日本放送参考' }}</span><span v-if="event.basis !== 'estimated'" class="frame-basis">{{ event.basis === 'official' ? '公告排期' : '来源排期' }}</span></div>
       <div class="frame-actions"><a class="button primary" :href="anime ? `#/anime/${anime.id}` : '#/season'" :aria-label="anime ? '打开今日作品详情' : '浏览季度新番'">{{ anime ? '查看作品' : '浏览季度新番' }}<Icon name="chevron" :size="15" /></a><button v-if="anime" ref="saveButton" class="hero-save" :class="{ saved }" :aria-label="saved ? '取消今日追番' : '追番今日作品'" :aria-pressed="saved" @click="toggleSaved"><Icon name="bookmark" :size="17" /><span>{{ saved ? '已在追番' : '加入追番' }}</span></button></div>
     </div>
     <div class="frame-visual-stage">

@@ -1,3 +1,4 @@
+import { listenTestServer } from './support/listen.js';
 import { afterEach, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { existingInstance } from '../server/launcher.js';
@@ -6,7 +7,7 @@ let server: Server | undefined;
 afterEach(async () => { if (server) await new Promise<void>(resolve => server!.close(() => resolve())); });
 async function listen(payload: string) {
   server = createServer((_req, res) => { res.setHeader('content-type', 'application/json'); res.end(payload); });
-  await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+  await listenTestServer(server);
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('port missing');
   return `http://127.0.0.1:${address.port}`;
 }

@@ -1,13 +1,34 @@
 {
   "version": 1,
   "active": [],
-  "events": [],
+  "events": [
+    {
+      "animeId": "bgm:548156", "at": "2026-11-01T08:00:00Z", "status": "cancelled",
+      "sourceUrl": "https://www.disneyplus.com/ja-jp/explore/articles/new-to-disney-plus",
+      "note": "本表采用Disney+网络排期。该平台11月逐日配信表将Season2第5话列在11月8日17:00日本时间，11月1日未列本作；据此取消本平台11月1日常规项，不代表所有平台均有相同公告。"
+    }
+  ],
   "rules": [
+    {
+      "animeId": "bgm:548156", "kind": "network", "broadcast": "R/2026-10-25T08:00:00Z/P7D", "begin": "",
+      "platform": "Disney+", "regions": ["JP"], "sourceUrl": "https://www.disneyplus.com/ja-jp/explore/articles/new-to-disney-plus",
+      "note": "采用Disney+正式网络口径，常规日本周日17:00（北京16:00）与作品官网配信公告一致；该平台11月逐日表把Season2第5话列在11月8日17:00，11月1日不生成普通更新。校准锚点不表示首话首次上线日期；本次例外只指采用的平台。"
+    },
+    {
+      "animeId": "bgm:499474", "kind": "network", "broadcast": "R/2026-10-02T17:00:00Z/P7D",
+      "platform": "Disney+", "regions": ["JP"], "sourceUrl": "https://www.disneyplus.com/ja-jp/explore/articles/tokyo-revengers",
+      "note": "Disney+官网明确10月3日02:00日本时间起、以后每周六同刻更新，即北京周六01:00。采用网络正式配信时刻，电视周五25:23及MBS单台延后不替代本平台时间。"
+    },
     {
       "animeId": "bgm:632061",
       "broadcast": "R/2026-10-09T12:00:00Z/P14D",
       "sourceUrl": "https://www.shopro.co.jp/anime/duelmasters_lost/",
-      "note": "官网注明隔周周五21:00（日本时间）、全四话；上游P7D周期不符。隔周规则暂不自动推算，请查看官网。"
+      "note": "官网注明隔周周五21:00（日本时间）、全四话；上游P7D周期不符。隔周规则暂不自动推算，请查看官网。",
+      "kind": "network",
+      "platform": "YouTube 公式チャンネル",
+      "regions": [
+        "JP"
+      ]
     },
     {
       "animeId": "bgm:513878",
@@ -106,36 +127,101 @@
       "note": "官网先行配信：每周三深夜24:30日本时间，采用网络时刻。官网电视为24:00，原聚合放送01:30有差异，详情保留原来源仅供参考。"
     },
     {
-      "animeId": "bgm:621108", "kind": "broadcast", "sourceUrl": "https://hotaru-anime.com/onair/",
-      "note": "官网：10月9日电视23:30，网络同日24:00起顺次配信，无正片网络先行。源U-NEXT9月18日记录不符。"
+      "animeId": "bgm:621108",
+      "kind": "network",
+      "sourceUrl": "https://hotaru-anime.com/onair/",
+      "note": "官网明确10月9日起每周五24:00日本时间顺次配信，即北京周五23:00；采用正式网络时刻，电视23:30另保留。",
+      "broadcast": "R/2026-10-09T15:00:00Z/P7D",
+      "platform": "各正规配信平台",
+      "regions": [
+        "JP"
+      ]
     },
     {
-      "animeId": "bgm:637802", "kind": "broadcast", "sourceUrl": "https://ranma-pr.com/onair/",
-      "note": "本季官网：10月3日起电视每周六24:55，Netflix放送直后独占配信。源Netflix2024时间为旧季，不是本季先行。"
+      "animeId": "bgm:637802",
+      "kind": "broadcast",
+      "sourceUrl": "https://ranma-pr.com/onair/",
+      "note": "本季官网确认Netflix在每周六24:55电视放送后独占配信，但没有单独公告精确网络分钟；旧季2024周期无效。网络时刻待核，不以电视开播分钟替代。"
     },
     {
-      "animeId": "bgm:584847", "kind": "broadcast", "sourceUrl": "https://chiramune.com/onair/",
-      "note": "官网第2cour：ABEMA Premium/dAnime每周二24:30日本时间，与地上波同刻；U-NEXT每周五24:30后发。源U-NEXT10月9日不是正片先行。"
+      "animeId": "bgm:584847",
+      "kind": "network",
+      "sourceUrl": "https://chiramune.com/onair/",
+      "note": "官网第2cour：ABEMA Premium/dAnime每周二24:30日本时间正式配信，即北京周二23:30；采用网络周期，非AT-X更早电视时间。U-NEXT每周五24:30后发。",
+      "broadcast": "R/2026-10-13T15:30:00Z/P7D",
+      "platform": "ABEMA Premium / dアニメストア",
+      "regions": [
+        "JP"
+      ]
     },
     {
-      "animeId": "bgm:568244", "kind": "broadcast", "sourceUrl": "https://kusuriyanohitorigoto.jp/news/2623/",
-      "note": "官网第3季：电视结束后各平台顺次配信。源U-NEXT9月16日及Netflix10月1日的早日期不是已核实先行。"
+      "animeId": "bgm:568244",
+      "kind": "network",
+      "begin": "",
+      "sourceUrl": "https://www.video.unext.jp/season_anime/autumn",
+      "note": "U-NEXT本季官方周表明确日本周六00:00常规更新，即北京时间周五23:00；仅确认常规时分，10月3日首次上架的精确分钟未另行推定。聚合早日期不视为已核实先行。",
+      "broadcast": "R/2026-10-09T15:00:00Z/P7D",
+      "platform": "U-NEXT",
+      "regions": [
+        "JP"
+      ]
     },
     {
-      "animeId": "bgm:568525", "kind": "broadcast", "sourceUrl": "https://the-vermilion-mask.com/onair/",
-      "note": "官网电视10月10日17:30起，网络仅见逃/顺次配信，未公告更早正片。源U-NEXT10月2日无先行依据。"
+      "animeId": "bgm:568525",
+      "kind": "network",
+      "begin": "",
+      "sourceUrl": "https://animestore.docomo.ne.jp/animestore/CQ/notice-13640",
+      "note": "dAnime官网与U-NEXT秋番页均明确周六18:00日本时间正规更新，即北京周六17:00。电视17:30为不同口径；首话首次上架分钟不从常规时刻反推。",
+      "broadcast": "R/2026-10-17T09:00:00Z/P7D",
+      "platform": "U-NEXT / dアニメストア",
+      "regions": [
+        "JP"
+      ]
     },
     {
-      "animeId": "bgm:541538", "kind": "broadcast", "sourceUrl": "https://suikoden-anime.com/onair/",
-      "note": "首话10月3日周六20:00特别播出；第2话起10月13日每周二23:30，10月6日为特番。平台周六P7D误把首话特别时间当整季周期。"
+      "animeId": "bgm:541538",
+      "kind": "network",
+      "sourceUrl": "https://animestore.docomo.ne.jp/animestore/CQ/notice-13573",
+      "note": "dAnime官方逐条脚注明确：首话10月3日20:00日本时间；第2话起10月13日每周二23:30。10月6日不生成正片事件。U-NEXT秋页仍列周六20:00，与具体首发/常规脚注冲突；优先此具体公告。",
+      "broadcast": "R/2026-10-13T14:30:00Z/P7D",
+      "broadcasts": [
+        "R/2026-10-03T11:00:00Z/P0D",
+        "R/2026-10-13T14:30:00Z/P7D"
+      ],
+      "platform": "dアニメストア",
+      "regions": [
+        "JP"
+      ]
     },
     {
-      "animeId": "bgm:434816", "kind": "broadcast", "sourceUrl": "https://nekokeibishitsu-anime.com/news/post-136/",
-      "note": "首批1至4话10月10日20:00上线，第5话起10月14日每周三23:30地上波同时配信。源平台周六周期误把首批上线当整季排期。"
+      "animeId": "bgm:434816",
+      "kind": "network",
+      "sourceUrl": "https://nekokeibishitsu-anime.com/news/post-136/",
+      "note": "官网明确第1至4话10月10日20:00日本时间一次上线；第5话起10月14日每周三23:30地上波同时配信。首批一次上线和后续常规周播分别记录。",
+      "broadcast": "R/2026-10-14T14:30:00Z/P7D",
+      "broadcasts": [
+        "R/2026-10-10T11:00:00Z/P0D",
+        "R/2026-10-14T14:30:00Z/P7D"
+      ],
+      "platform": "dアニメストア / U-NEXT / ABEMA 等",
+      "regions": [
+        "JP"
+      ]
     },
     {
-      "animeId": "bgm:688204", "kind": "broadcast", "sourceUrl": "https://yusanchi-anime.jp/",
-      "note": "官网电视周一/五11点左右，YouTube/FOD/TVer同日16点放送后配信，无先行。源U-NEXT9月26日错误；原TV周播源也未完整表达一周两播。"
+      "animeId": "bgm:688204",
+      "kind": "network",
+      "sourceUrl": "https://yusanchi-anime.jp/",
+      "note": "官网明确每周一、五放送后16:00日本时间上线期间限定见逃，即北京每周一、五15:00。两条周播规则分别展开；不采用11:00左右的电视参考，U-NEXT旧日期无效。",
+      "broadcast": "R/2026-10-05T07:00:00Z/P7D",
+      "broadcasts": [
+        "R/2026-10-05T07:00:00Z/P7D",
+        "R/2026-10-09T07:00:00Z/P7D"
+      ],
+      "platform": "YouTube（フジテレビアニメ公式）/ FOD / TVer",
+      "regions": [
+        "JP"
+      ]
     }
   ]
 }

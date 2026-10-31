@@ -122,10 +122,10 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <section class="weekly-page" aria-label="本周日本放送参考">
+  <section class="weekly-page" aria-label="本周网络更新参考">
     <FeaturedHero />
     <div class="view-heading weekly-heading"><div><h1>本周番表<span class="heading-dot">.</span></h1><p>{{ days[0]?.short }} — {{ days[6]?.short }}</p></div><div class="weekly-controls"><div class="weekly-layout-switch" role="group" aria-label="番表布局"><button aria-label="竖列番表" :aria-pressed="state.weeklyLayout.value === 'columns'" @click="state.setWeeklyLayout('columns')"><Icon name="columns" :size="16" /><span>竖列</span></button><button aria-label="横排番表" :aria-pressed="state.weeklyLayout.value === 'rows'" @click="state.setWeeklyLayout('rows')"><Icon name="rows" :size="16" /><span>横排</span></button></div><label class="checkbox-label"><input v-model="onlyFavorites" type="checkbox" />仅看收藏</label></div></div>
-    <div class="week-meta"><span class="weekly-count">{{ events.length }} 条排期</span><details ref="scheduleHelp" class="schedule-help"><summary><Icon name="info" :size="14" />排期说明</summary><p>网络先行优先，含跨季续播。部分排期为周期推算；时间已过不代表平台已更新。待定作品暂缺可推算排期。</p></details></div>
+    <div class="week-meta"><span class="weekly-count">{{ events.length }} 条排期</span><details ref="scheduleHelp" class="schedule-help"><summary><Icon name="info" :size="14" />排期说明</summary><p>采用已收录的网络配信排期，含跨季续播。周期推算不代表平台已更新；未核实网络时间的作品列为待定。</p></details></div>
     <div class="day-tabs" role="group" aria-label="选择日期"><button v-for="day in days" :key="day.key" :aria-label="`${day.name} ${day.short}`" :aria-pressed="selectedDay === day.key" :class="{ selected: selectedDay === day.key, today: today === day.key }" @click="selectedDay = day.key"><span>{{ day.name.slice(2) }}</span><strong>{{ day.day }}</strong></button></div>
     <div ref="calendarElement" class="weekly-grid" :data-layout="state.weeklyLayout.value">
       <section v-for="day in grouped" :key="day.key" class="day-column" :class="{ today: day.key === today, 'mobile-selected': day.key === selectedDay }" :data-day="day.key" :aria-label="day.name">

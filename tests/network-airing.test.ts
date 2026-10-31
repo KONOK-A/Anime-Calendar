@@ -13,7 +13,7 @@ function catalog(streams: object[]) {
   };
 }
 
-describe('网络先行默认排期', () => {
+describe('正式网络默认排期', () => {
   it('为所有作品选择早于原开播的正规网络周期，并保留原放送及地区', () => {
     const data = catalog([
       { site: 'early', id: '1', begin: '2026-10-17T12:00:00Z', broadcast: 'R/2026-10-17T12:00:00Z/P7D' },
@@ -35,13 +35,13 @@ describe('网络先行默认排期', () => {
       { animeId: 'bgm:1', at: '2026-10-31T12:00:00.000Z', basis: 'estimated', status: 'scheduled', sourceUrl: 'https://early.example/1' },
     ]);
   });
-  it('没有周期的页面上架日期、晚于原放送的网播和无效时间不作为先行', () => {
+  it('排除没有周期的页面上架日期，同时采用晚于电视的正规网播', () => {
     const base = normalizeCatalog(catalog([
       { site: 'early', id: '1', begin: '2026-09-01T00:00:00Z' },
       { site: 'second', id: '1', begin: '2026-10-20T00:00:00Z', broadcast: 'R/2026-10-20T00:00:00Z/P7D' },
     ]));
-    expect(base.items[0].networkAiring).toBeUndefined();
-    expect(base.items[0].rule.anchor).toBe('2026-10-19T15:30:00.000Z');
+    expect(base.items[0].networkAiring?.platform).toBe('另一个平台');
+    expect(base.items[0].rule.anchor).toBe('2026-10-20T00:00:00.000Z');
   });
   it('更新后的网络周期用当前anchor，不能一直使用初始begin的旧时刻', () => {
     const anime = normalizeCatalog(catalog([{ site: 'early', id: '1', begin: '2026-10-17T12:00:00Z', broadcast: 'R/2026-10-31T13:00:00Z/P7D' }])).items[0];

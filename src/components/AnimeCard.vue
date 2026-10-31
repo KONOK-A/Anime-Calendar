@@ -2,11 +2,15 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { AiringEvent, Anime, AnimeRating } from '../../shared/types';
 import { dateKey, formatClock } from '../../shared/schedule';
+import type { RatingSummary } from '../../shared/scores';
+import { adaptationFromTags } from '../../shared/adaptation';
 import { useAppState } from '../state';
+import { resolveRatingSummary } from '../rating-display';
 import Poster from './Poster.vue';
 import Icon from './Icon.vue';
+import RatingBadge from './RatingBadge.vue';
 import { animateSaved, usePointerLight } from '../motion';
-const props = defineProps<{ anime: Anime; ratingOverride?: AnimeRating | null; event?: AiringEvent; compact?: boolean; showNextAiring?: boolean; nextEvent?: AiringEvent; lightframe?: boolean; showcase?: boolean }>();
+const props = defineProps<{ anime: Anime; ratingOverride?: AnimeRating | null; summaryOverride?: RatingSummary | null; event?: AiringEvent; compact?: boolean; showNextAiring?: boolean; nextEvent?: AiringEvent; lightframe?: boolean; showcase?: boolean }>();
 const state = useAppState(), element = ref<HTMLElement>();
 const saveButton = ref<HTMLElement>();
 const framed = computed(() => !!(props.lightframe || props.showcase || !props.compact));
@@ -20,10 +24,12 @@ async function toggleSaved() {
 }
 const detail = computed(() => state.details.get(props.anime.id));
 const rating = computed(() => props.ratingOverride === undefined ? detail.value?.rating : props.ratingOverride);
+const ratingSummary = computed(() => resolveRatingSummary(props.summaryOverride, props.ratingOverride === undefined ? state.ratingSummaries.get(props.anime.id) : undefined, rating.value, props.anime.sourceUrl, detail.value?.detailFetchedAt));
+const adaptation = computed(() => detail.value?.adaptation === undefined ? adaptationFromTags(detail.value?.tags ?? []) : detail.value.adaptation);
 const saved = computed(() => state.favorites.value.includes(props.anime.id));
 const eventNote = computed(() => {
   if (!props.event) return '';
-  return props.event.note || (props.event.status === 'cancelled' ? '本次休播' : props.anime.networkAiring ? '网络先行' : '');
+  return props.event.note || (props.event.status === 'cancelled' ? '本次休播' : '');
 });
 const nextLabel = computed(() => {
   if (!props.nextEvent) return '14天内暂无排期';
@@ -38,7 +44,7 @@ const beginDate = computed(() => {
 });
 let observer: IntersectionObserver | undefined;
 onMounted(() => {
-  observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { void state.loadDetail(props.anime.id); observer?.disconnect(); } }, { rootMargin: '180px' });
+  observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) void state.loadDetail(props.anime.id); }, { rootMargin: '180px' });
   if (element.value) observer.observe(element.value);
 });
 onUnmounted(() => { observer?.disconnect(); feedback?.cancel(); });
@@ -46,10 +52,10 @@ onUnmounted(() => { observer?.disconnect(); feedback?.cancel(); });
 <template>
   <article ref="element" class="anime-card" :data-anime-id="anime.id" :class="{ compact, cancelled: event?.status === 'cancelled', 'lightframe-schedule': lightframe, 'lightframe-poster': !compact && !showNextAiring, 'lightframe-collection': showNextAiring }" @pointermove="pointer.move" @pointerleave="pointer.reset">
     <span v-if="framed" class="card-edge-glow" aria-hidden="true" />
-    <div v-if="event" class="event-time"><time :datetime="event.at">{{ formatClock(event.at, state.timezone.value) }}</time><span v-if="event.status === 'cancelled' || event.basis !== 'estimated'" class="basis" :class="{ official: event.basis === 'official', hiatus: event.status === 'cancelled' }">{{ event.status === 'cancelled' ? '休播' : event.basis === 'official' ? '公告' : '来源排期' }}</span></div>
+    <div v-if="event" class="event-time"><time :datetime="event.at">{{ formatClock(event.at, state.timezone.value) }}</time><RatingBadge v-if="compact && ratingSummary?.score != null" class="card-rating compact-rating" :summary="ratingSummary" /><span v-if="event.status === 'cancelled' || event.basis !== 'estimated'" class="basis" :class="{ official: event.basis === 'official', hiatus: event.status === 'cancelled' }">{{ event.status === 'cancelled' ? '休播' : event.basis === 'official' ? '公告' : '来源排期' }}</span></div>
     <a :href="`#/anime/${anime.id}`" :aria-label="`查看${anime.title}${showcase ? '海报' : ''}详情`" class="anime-link">
-      <div class="poster-frame"><Poster :id="anime.id" :revision="detail?.detailFetchedAt" :size="compact ? 'thumb' : 'card'" :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" /><span v-if="!compact && rating" class="card-rating" :aria-label="`Bangumi评分 ${rating.score.toFixed(1)}`"><Icon name="star" :size="12" />{{ rating.score.toFixed(1) }}</span></div>
-      <div class="card-copy"><h3 :title="anime.title">{{ anime.title }}</h3><p v-if="!compact && anime.originalTitle !== anime.title" class="original-title" :title="anime.originalTitle">{{ anime.originalTitle }}</p><div class="card-tags"><span>{{ anime.type.toUpperCase() }}</span><span v-if="event && anime.season !== state.currentSeason.value" class="continuing">续播</span><span v-if="!event && !showNextAiring">{{ beginDate.replaceAll('-', '.') }}</span><span v-if="compact && rating" class="card-rating compact-rating" :aria-label="`Bangumi评分 ${rating.score.toFixed(1)}`"><Icon name="star" :size="11" />{{ rating.score.toFixed(1) }}</span></div></div>
+      <div class="poster-frame"><Poster :id="anime.id" :revision="detail?.detailFetchedAt" :size="compact ? 'thumb' : 'card'" :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" /><RatingBadge v-if="!compact && ratingSummary?.score != null" class="card-rating" :summary="ratingSummary" /></div>
+      <div class="card-copy"><h3 :title="anime.title">{{ anime.title }}</h3><p v-if="!compact && anime.originalTitle !== anime.title" class="original-title" :title="anime.originalTitle">{{ anime.originalTitle }}</p><div class="card-tags"><span class="card-type">{{ anime.type.toUpperCase() }}</span><span v-if="adaptation" class="card-adaptation">{{ adaptation }}</span><span v-if="event && anime.season !== state.currentSeason.value" class="continuing">续播</span><span v-if="!event && !showNextAiring" class="card-begin">{{ beginDate.replaceAll('-', '.') }}</span></div></div>
       <div v-if="showNextAiring" class="next-airing" :class="{ pending: !nextEvent }"><span><Icon name="clock" :size="13" />{{ nextEvent ? '下次放送' : '排期参考' }}</span><p v-if="nextEvent"><span class="next-date">{{ nextLabel.split(' ')[0] }}</span>{{ ' ' }}<time :datetime="nextEvent.at">{{ formatClock(nextEvent.at, state.timezone.value) }}</time></p><p v-else>{{ nextLabel }}</p><small v-if="nextEvent" class="next-weekday">{{ nextWeekday }}<span v-if="nextEvent.basis !== 'estimated'"> · {{ nextEvent.basis === 'official' ? '公告' : '来源排期' }}</span></small></div>
     </a>
     <div v-if="eventNote" class="event-footnote">{{ eventNote }}</div>
@@ -62,6 +68,9 @@ onUnmounted(() => { observer?.disconnect(); feedback?.cancel(); });
 .card-edge-glow:before{content:'';position:absolute;left:0;top:0;width:220px;height:220px;background:radial-gradient(circle,var(--frame-blue),var(--frame-violet) 25%,var(--frame-rose) 42%,transparent 65%);transform:translate(calc(var(--pointer-x,0px) - 110px),calc(var(--pointer-y,0px) - 110px))}
 [data-pointer='active']>.card-edge-glow{display:block;opacity:1}
 @starting-style{[data-pointer='active']>.card-edge-glow{opacity:0}}
+.anime-card .card-tags{align-items:center;min-width:0;gap:4px 6px;line-height:16px}
+.anime-card .card-tags>:is(.card-type,.card-adaptation,.continuing){display:inline-flex;align-items:center;flex:0 0 auto;height:20px;padding:2px 5px;border-radius:4px;background:var(--soft);color:var(--muted);font-size:inherit;font-weight:500;line-height:16px;white-space:nowrap}
+.anime-card .card-tags>.card-begin{display:inline-flex;align-items:center;height:20px;padding:2px 0;color:var(--muted);font-size:inherit;line-height:16px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .anime-card.lightframe-poster{padding:var(--poster-inset,8px) var(--poster-inset,8px) 0;border-radius:20px;border:1px solid var(--line);background:linear-gradient(150deg,var(--surface),color-mix(in srgb,var(--surface) 92%,var(--accent)));box-shadow:0 10px 24px -15px color-mix(in srgb,var(--accent) 30%,transparent),inset 0 1px 0 var(--surface-glint);overflow:hidden;transition:transform .18s cubic-bezier(.22,1,.36,1),border-color .18s,box-shadow .18s}
 .lightframe-poster .anime-link{display:flex;flex-direction:column;height:100%}
 .lightframe-poster .poster-frame{border-radius:12px;overflow:hidden;position:relative;aspect-ratio:5/7;transform:perspective(900px) rotateX(var(--tilt-x,0deg)) rotateY(var(--tilt-y,0deg));transition:transform .22s ease-out}
@@ -70,22 +79,22 @@ onUnmounted(() => { observer?.disconnect(); feedback?.cancel(); });
 .lightframe-poster .card-copy{padding:var(--poster-copy-padding,16px 9px 14px);display:flex;flex-direction:column;flex:1;position:relative}
 .lightframe-poster .card-copy h3{font-size:var(--poster-title-size,16px);line-height:1.55;font-weight:650;min-height:3.1em;margin:0}
 .lightframe-poster .original-title{font-size:12px;margin:7px 0 14px;line-height:1.6}
-.lightframe-poster .card-tags{padding:11px 0 0;margin-top:auto;background:none;border-top:1px solid var(--line);border-radius:0;gap:10px;font-size:12px;align-items:center}
-.lightframe-poster .card-tags>span:first-child{background:var(--soft);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--accent)}
+.lightframe-poster .card-tags{padding:11px 0 0;margin-top:auto;background:none;border-top:1px solid var(--line);border-radius:0;gap:4px 6px;font-size:12px;align-items:center}
 .lightframe-poster .save-card{right:calc(var(--poster-inset,8px) + 8px);top:calc(var(--poster-inset,8px) + 8px);width:36px;height:36px;border-radius:10px;background:var(--glass);border:1px solid var(--overlay-line);color:var(--ink);box-shadow:0 3px 12px rgba(20,33,60,.13)}
 .lightframe-poster .save-card.saved{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .lightframe-poster .card-rating{left:8px;top:8px;background:var(--glass);padding:5px 7px;border:1px solid var(--overlay-line);font-size:12px;border-radius:8px}
 .lightframe-poster .anime-link:focus-visible{outline-offset:-3px;border-radius:12px}
 .anime-card.lightframe-schedule{position:relative;min-width:0;margin:0;display:block;padding:var(--schedule-padding,12px);border:1px solid color-mix(in srgb,var(--accent) 10%,var(--line));border-radius:13px;background:linear-gradient(145deg,var(--surface) 70%,color-mix(in srgb,var(--surface) 96%,var(--accent)));box-shadow:0 7px 18px -12px color-mix(in srgb,var(--accent) 18%,transparent);transition:transform .18s,border-color .18s,box-shadow .18s}
-.lightframe-schedule .event-time{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-height:27px;margin-bottom:var(--schedule-time-gap,12px);padding-right:30px}
-.lightframe-schedule .event-time time{color:var(--accent);font-weight:650;letter-spacing:-.6px;font-size:var(--schedule-clock-size,20px);margin-right:auto;line-height:1.65}
-.lightframe-schedule .event-time:before{content:'';width:3px;height:14px;background:linear-gradient(var(--frame-blue),var(--frame-violet) 52%,var(--frame-rose));border-radius:2px;margin-right:2px;flex-shrink:0}
+.lightframe-schedule .event-time{display:grid;grid-template-columns:3px minmax(0,1fr) auto;align-items:center;gap:1px 5px;min-height:27px;margin-bottom:var(--schedule-time-gap,12px);padding-right:32px}
+.lightframe-schedule .event-time time{grid-column:2;grid-row:1;min-width:0;color:var(--accent);font-weight:650;letter-spacing:-.6px;font-size:var(--schedule-clock-size,20px);margin-right:0;line-height:1.65;white-space:nowrap}
+.lightframe-schedule .event-time:before{content:'';grid-column:1;grid-row:1;width:3px;height:14px;background:linear-gradient(var(--frame-blue),var(--frame-violet) 52%,var(--frame-rose));border-radius:2px}
+.lightframe-schedule .event-time .compact-rating{grid-column:3;grid-row:1;justify-self:end;gap:3px;font-size:12px;line-height:1.4;color:var(--rating)}
 .lightframe-schedule .anime-link{display:flex;gap:9px;align-items:flex-start}
 .lightframe-schedule .poster-frame{width:var(--schedule-poster-size,48px);min-width:var(--schedule-poster-size,48px);flex:0 0 var(--schedule-poster-size,48px);border-radius:6px;overflow:hidden;background:var(--soft);box-shadow:0 3px 6px rgba(26,46,88,.09)}
 .lightframe-schedule .poster{width:var(--schedule-poster-size,48px);min-width:var(--schedule-poster-size,48px);aspect-ratio:5/7;border-radius:0}
-.lightframe-schedule .card-copy{min-width:0}.lightframe-schedule .card-copy h3{font-size:13px;font-weight:550;line-height:1.6;margin:0;-webkit-line-clamp:3}
+.lightframe-schedule .card-copy{flex:1;min-width:0}.lightframe-schedule .card-copy h3{font-size:13px;font-weight:550;line-height:1.6;margin:0;-webkit-line-clamp:3}
 .lightframe-schedule .card-tags{margin-top:5px;gap:4px;font-size:10px}
-.lightframe-schedule .basis{font-size:10px;color:var(--muted)}.lightframe-schedule .basis.official{color:var(--accent)}.lightframe-schedule .basis.hiatus{color:var(--error)}
+.lightframe-schedule .basis{grid-column:2 / -1;grid-row:2;font-size:10px;line-height:1.6;color:var(--muted)}.lightframe-schedule .basis.official{color:var(--accent)}.lightframe-schedule .basis.hiatus{color:var(--error)}
 .lightframe-schedule .save-card{position:absolute;right:10px;top:11px;bottom:auto;left:auto;display:grid;place-items:center;width:26px;height:26px;margin:0;padding:0;border:0;border-radius:7px;background:var(--soft);color:var(--muted)}
 .lightframe-schedule .save-card svg{width:15px;height:15px}.lightframe-schedule .save-card.saved{background:var(--accent);color:var(--accent-ink);box-shadow:0 2px 6px color-mix(in srgb,var(--accent) 24%,transparent)}.lightframe-schedule .save-card.saved svg{fill:currentColor}
 .lightframe-schedule .event-footnote{font-size:11px;line-height:1.7;margin-top:9px;padding:0;color:var(--muted)}

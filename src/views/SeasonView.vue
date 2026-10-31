@@ -8,6 +8,8 @@ import Icon from '../components/Icon.vue';
 import { useListMotion } from '../motion';
 import { sortSeasonAnime } from '../season-sort';
 import type { SeasonSort } from '../season-sort';
+import { resolveRatingSummary } from '../rating-display';
+import { ratingItemIdentity } from '../season-ratings';
 const props = defineProps<{ season?: string }>(), state = useAppState();
 const resultsHeading = ref<HTMLElement>();
 const rangeGradient = `season-range-${useId()}`;
@@ -28,11 +30,16 @@ const page = computed({ get: () => view.value.page, set: value => { view.value.p
 const sort = computed<SeasonSort>({ get: () => view.value.sort ?? 'premiere', set: value => { view.value.sort = value; } });
 const seasonItems = computed(() => (state.catalog.value?.items ?? []).filter(item => item.season === season.value));
 const seasonIds = computed(() => seasonItems.value.map(item => item.id).sort().join(','));
+const seasonRatingIdentity = computed(() => seasonItems.value.map(ratingItemIdentity).sort().join(','));
 const ratingOwner = {}, ratings = state.seasonRatings;
-const usableRatings = computed(() => ratings.snapshot.value?.scope.season === season.value && ratings.snapshot.value.ids.slice().sort().join(',') === seasonIds.value);
-const scores = computed(() => new Map(usableRatings.value ? ratings.snapshot.value!.entries.map(entry => [entry.id, entry.rating]) : []));
-function loadRatings() { return ratings.load(season.value, seasonItems.value.map(item => item.id), ratingOwner); }
-watch([sort, season, seasonIds, () => state.loading.value], () => {
+const usableRatings = computed(() => ratings.snapshot.value?.scope.season === season.value && ratings.snapshot.value.ids.slice().sort().join(',') === seasonIds.value && ratings.snapshot.value.entries.length === ratings.snapshot.value.total && (ratings.snapshot.value.status !== 'loading' || ratings.snapshot.value.processed === ratings.snapshot.value.total));
+const summaries = computed(() => {
+  const items = new Map(seasonItems.value.map(item => [item.id, item]));
+  return new Map(usableRatings.value ? ratings.snapshot.value!.entries.map(entry => [entry.id, entry.summary ?? resolveRatingSummary(undefined, undefined, entry.rating, items.get(entry.id)?.sourceUrl ?? '', entry.fetchedAt)]) : []);
+});
+const scores = computed(() => new Map(usableRatings.value ? ratings.snapshot.value!.entries.map(entry => [entry.id, entry.summary ?? entry.rating]) : []));
+function loadRatings() { return ratings.load(season.value, seasonItems.value.map(item => item.id), ratingOwner, seasonItems.value); }
+watch([sort, season, seasonRatingIdentity, () => state.loading.value], () => {
   if (sort.value === 'rating' && !state.loading.value && seasonItems.value.length) void loadRatings(); else ratings.cancel(ratingOwner);
 }, { immediate: true });
 onUnmounted(() => ratings.cancel(ratingOwner));
@@ -85,7 +92,7 @@ async function changePage(value: number) {
     <div class="catalog-results"><div class="section-heading"><h2 id="season-results" ref="resultsHeading" tabindex="-1">{{ seasonLabel(season) }}</h2><p>{{ sort === 'rating' ? '评分从高到低' : '首播顺序' }}<span v-if="pages > 1"> · {{ page }} / {{ pages }}</span></p></div>
     <div v-if="sort === 'rating' && seasonItems.length && (ratings.loading.value || ratings.error.value)" class="rating-status" aria-live="polite"><span v-if="ratings.loading.value">{{ usableRatings ? '正在更新评分' : '正在读取本季度评分' }} · {{ ratings.progress.value.processed }} / {{ ratings.progress.value.total }}</span><template v-else><span>{{ ratings.error.value }}</span><button class="button" @click="loadRatings">稍后重试</button></template></div>
     <div v-if="sort === 'rating' && seasonItems.length && !usableRatings" class="empty-state" :role="ratings.loading.value ? 'status' : undefined"><Icon v-if="ratings.loading.value" name="refresh" :size="28" class="spinning" /><h2>{{ ratings.loading.value ? '正在准备评分排序…' : '暂时无法按评分排序' }}</h2><button class="button" @click="sort = 'premiere'">按首播顺序浏览</button></div>
-    <div v-else-if="visible.length" ref="gridElement" class="poster-grid" :data-density="state.catalogColumns.value" :style="{ '--catalog-columns': state.catalogColumns.value }"><AnimeCard v-for="anime in visible" :key="anime.id" :anime="anime" :rating-override="sort === 'rating' ? scores.get(anime.id) ?? null : undefined" /></div>
+    <div v-else-if="visible.length" ref="gridElement" class="poster-grid" :data-density="state.catalogColumns.value" :style="{ '--catalog-columns': state.catalogColumns.value }"><AnimeCard v-for="anime in visible" :key="anime.id" :anime="anime" :summary-override="sort === 'rating' ? summaries.get(anime.id) ?? null : undefined" /></div>
     <div v-else-if="state.loading.value" class="empty-state" role="status"><Icon name="refresh" :size="28" class="spinning" /><h2>正在读取本季度作品…</h2></div>
     <div v-else-if="state.viewError.value && !state.catalog.value" class="empty-state"><h2>暂时无法读取作品</h2><button class="button" @click="state.retryView">重试获取</button></div>
     <div v-else class="empty-state"><Icon name="search" :size="36" /><h2>{{ query || type ? '没有匹配的作品' : '这个季度暂无数据' }}</h2><button v-if="query || type" class="button" @click="query = ''; type = ''">清除筛选</button><button v-else class="button" :disabled="state.status.value?.refreshing" @click="state.refresh">刷新数据</button></div>

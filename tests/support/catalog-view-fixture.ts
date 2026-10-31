@@ -24,12 +24,12 @@ export async function clearAccelerationCache(page: Page) {
   await page.addInitScript(() => {
     if (!globalThis.caches) return;
     const storage = caches, open = storage.open.bind(storage);
-    const cleared = storage.keys().then(names => Promise.all(names.filter(name => /^anime-calendar:(views|details):/.test(name)).map(name => storage.delete(name))));
+    const cleared = storage.keys().then(names => Promise.all(names.filter(name => /^anime-calendar:(views|details|ratings):/.test(name)).map(name => storage.delete(name))));
     storage.open = async name => { await cleared; return open(name); };
   });
   await page.evaluate(async () => {
     if (!location.href.startsWith('http') || !globalThis.caches) return;
-    for (const name of await caches.keys()) if (/^anime-calendar:(views|details):/.test(name)) await caches.delete(name);
+    for (const name of await caches.keys()) if (/^anime-calendar:(views|details|ratings):/.test(name)) await caches.delete(name);
   });
 }
 export async function useCatalogFixture(page: Page, catalog: CatalogSnapshot, before?: () => void | Promise<void>) {

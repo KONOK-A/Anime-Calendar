@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import { listenTestServer } from './support/listen.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,7 +21,7 @@ describe('封面路由与资料兼容', () => {
       if (url.includes('/subjects/')) return new Response(JSON.stringify({ id: 1, name: 'sample', images: { large: 'https://lain.bgm.tv/original.png', small: 'https://lain.bgm.tv/small.png', common: 'https://lain.bgm.tv/common.png', medium: 'https://lain.bgm.tv/medium.png' } }));
       return new Response(JSON.stringify(url.includes('/calendar') ? rawCalendar : rawCatalog));
     } }); services.push(service); await service.initialize(); await service.refresh();
-    const server = createApp(service, directory).listen(0, '127.0.0.1'); servers.push(server); await new Promise<void>(resolve => server.once('listening', resolve));
+    const server = await listenTestServer(createServer(createApp(service, directory))); servers.push(server);
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('port'); const base = `http://127.0.0.1:${address.port}`;
     const [poster, detail] = await Promise.all([fetch(`${base}/media/posters/bgm%3A1/card`), fetch(`${base}/api/anime/bgm%3A1`)]);
     expect(poster.status).toBe(200); expect(poster.headers.get('content-type')).toContain('image/png'); expect(poster.headers.get('cache-control')).toContain('max-age=86400');

@@ -60,7 +60,7 @@ describe('数据缓存与刷新', () => {
     await service.initialize(); await service.refresh();
     expect(service.catalog()?.items[0].rule.end).toBe('2026-11-09T16:00:00.000Z');
   });
-  it('官方确认并非先行时忽略错误平台记录，保留更新中的原放送规则', async () => {
+  it('官方否定错误平台记录且未确认网络时间时列待定，原电视参考仅保留详情', async () => {
     const dir = await directory(), overridesPath = join(dir, 'overrides.json');
     await writeFile(overridesPath, JSON.stringify({ version: 1, active: [], events: [], rules: [{ animeId: 'bgm:1', kind: 'broadcast', sourceUrl: 'https://example.com/onair', note: '官网说明网络在电视之后；源页面日期错误' }] }));
     const data = structuredClone(rawCatalog);
@@ -69,7 +69,9 @@ describe('数据缓存与刷新', () => {
     await service.initialize(); await service.refresh();
     expect(service.status().warnings.join(' ')).not.toContain('人工修正未加载');
     expect(service.catalog()?.items[0].networkAiring).toBeUndefined();
-    expect(service.catalog()?.items[0].rule.anchor).toBe('2026-10-19T15:30:00.000Z');
+    expect(service.catalog()?.items[0].rule.anchor).toBeNull();
+    expect(service.catalog()?.items[0].rule.frequency).toBe('unknown');
+    expect(service.catalog()?.items[0].broadcastRule.anchor).toBe('2026-10-19T15:30:00.000Z');
   });
   it('刷新去重，完成后可从磁盘重启读取，六小时内无需重新获取', async () => {
     const dir = await directory();
@@ -108,14 +110,24 @@ describe('数据缓存与刷新', () => {
     expect(await service.detail('bgm:1', true)).toMatchObject({ summary: '旅途简介', detailError: expect.any(String) });
     expect(service.catalog()?.items).toHaveLength(2);
   });
-  it('所有上游请求共享两个并发名额', async () => {
-    const dir = await directory(); let active = 0, peak = 0;
+  it('所有上游请求共享四个并发名额', async () => {
+    const dir = await directory(); let active = 0, peak = 0, blocked = false;
+    let release!: () => void, reached!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; }), four = new Promise<void>(resolve => { reached = resolve; });
+    const catalog = structuredClone(rawCatalog); catalog.items.push({ ...catalog.items[1]!, sites: [{ site: 'bangumi', id: '3' }] });
     const service = new AnimeService({ directory: dir, now, fetcher: async url => {
-      active++; peak = Math.max(peak, active); await new Promise(resolve => setTimeout(resolve, 10)); active--;
+      active++; peak = Math.max(peak, active);
+      if (blocked) { if (active === 4) reached(); await gate; }
+      active--;
       const id = Number(url.split('/').at(-1));
-      return response(url.includes('/subjects/') ? { id, name: 'sample', summary: '', images: {} } : url.includes('/calendar') ? rawCalendar : rawCatalog);
+      return response(url.includes('/subjects/') ? { id, name: 'sample', summary: '', images: {} } : url.includes('/calendar') ? rawCalendar : catalog);
     } });
     await service.initialize(); await service.refresh();
-    await Promise.all([service.refresh(), service.detail('bgm:1'), service.detail('bgm:2')]); expect(peak).toBe(2);
+    blocked = true;
+    const pending = Promise.all([service.refresh(), service.detail('bgm:1'), service.detail('bgm:2'), service.detail('bgm:3')]);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try { await Promise.race([four, new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('四个上游名额未能同时工作')), 3000); })]); }
+    finally { clearTimeout(timeout); release(); await pending; }
+    expect(peak).toBe(4);
   });
 });

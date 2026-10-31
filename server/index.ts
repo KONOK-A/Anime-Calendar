@@ -24,7 +24,7 @@ async function main() {
   if (await existingInstance(url)) { console.log(`番时记已在运行：${url}`); openBrowser(); return; }
   if (!existsSync(resolve(root, 'dist/client/index.html'))) throw new Error('缺少页面构建，请在项目目录运行 npm run build。');
   const monitoring = observeRuntime(() => service.upstream.stats());
-  const service = new AnimeService({ directory: config.dataDirectory, overridesPath: resolve(root, 'data/overrides.json'), observe: monitoring.observe });
+  const service = new AnimeService({ directory: config.dataDirectory, overridesPath: resolve(root, 'data/overrides.json'), observe: monitoring.observe, ratings: { malClientId: process.env.ANIME_CALENDAR_MAL_CLIENT_ID, aniListEnabled: process.env.ANIME_CALENDAR_ANILIST_RATINGS?.trim().toLowerCase() !== 'false' } });
   await service.initialize();
   const app = createApp(service, resolve(root, 'dist/client'), { publicOrigin: config.publicOrigin, assetOrigin: config.assetOrigin, assetsDirectory: config.publicOrigin ? join(config.dataDirectory, 'public-assets') : undefined, observe: monitoring.observe });
   const server = app.listen(4317, '127.0.0.1');

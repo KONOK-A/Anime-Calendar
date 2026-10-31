@@ -1,0 +1,25 @@
+import { createServer } from 'node:http';
+import { listenTestServer } from './support/listen.js';
+import { afterEach, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { AnimeService } from '../server/service.js';
+import { createApp } from '../server/app.js';
+import { rawCalendar, rawCatalog } from './fixtures.js';
+import type { Server } from 'node:http';
+const directories: string[] = [], servers: Server[] = [];
+afterEach(async () => { for (const server of servers.splice(0)) { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
+it('独立评分接口保留作品身份和四来源状态，不妨碍基础详情', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'anime-rating-api-')); directories.push(directory);
+  const service = new AnimeService({ directory, fetcher: async url => new Response(JSON.stringify(url.includes('/subjects/') ? { id: 1, name: '星旅', rating: { score: 8, total: 30 } } : url.includes('/calendar') ? rawCalendar : rawCatalog)) });
+  await service.initialize(); await service.refresh();
+  const server = await listenTestServer(createServer(createApp(service, directory))); servers.push(server);
+  const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const response = await fetch(`${origin}/api/anime/bgm%3A1/ratings?wait=1`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ id: 'bgm:1', score: 8, count: 1, sources: [{ provider: 'bangumi', score: 8, votes: 30 }, { provider: 'mal', status: 'unlinked' }, { provider: 'filmarks', status: 'unlinked' }, { provider: 'anilist', status: 'unlinked' }] });
+  expect((await fetch(`${origin}/api/anime/bgm%3A999/ratings`)).status).toBe(404);
+  expect(await (await fetch(`${origin}/api/anime/bgm%3A1`)).json()).toMatchObject({ title: '星旅', rating: { score: 8, total: 30 } });
+  await service.drain(); service.close();
+});

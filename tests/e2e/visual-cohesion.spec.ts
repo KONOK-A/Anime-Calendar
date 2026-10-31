@@ -9,7 +9,7 @@ test('视觉统一：目录海报的评分与追番入口顶部对齐且左右�
   await page.goto('/#/season/2026/4');
   const grid = page.locator('.catalog-page .poster-grid');
   const card = grid.locator('[data-anime-id="bgm:1"]');
-  await expect(card.getByLabel('Bangumi评分 7.8', { exact: true })).toBeVisible();
+  await expect(card.getByLabel('综合评分 7.8 / 10', { exact: true })).toBeVisible();
   await expect(card.getByRole('button', { name: '追番星旅', exact: true })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
 

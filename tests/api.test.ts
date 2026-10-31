@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import { listenTestServer } from './support/listen.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../server/app.js';
 import { AnimeService } from '../server/service.js';
@@ -14,7 +16,7 @@ async function boot(publicOrigin?: string, fetcher?: (url: string) => Promise<Re
   directory = await mkdtemp(join(tmpdir(), 'anime-calendar-api-'));
   const service = new AnimeService({ directory, fetcher: fetcher ?? (async url => new Response(JSON.stringify(url.includes('/calendar') ? rawCalendar : rawCatalog))) });
   await service.initialize(); const app = createApp(service, join(directory, 'dist'), { publicOrigin });
-  server = await new Promise<Server>(resolve => { const instance = app.listen(0, '127.0.0.1', () => resolve(instance)); });
+  server = await listenTestServer(createServer(app));
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('missing port');
   return { service, url: `http://127.0.0.1:${address.port}` };
 }

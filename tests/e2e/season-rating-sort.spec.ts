@@ -8,7 +8,7 @@ test('季度评分：默认首播不额外取整季评分，切换后最高分�
   expect(requests.filter(path => path === '/api/catalog/ratings')).toHaveLength(0);
   await page.getByRole('combobox', { name: '作品排序', exact: true }).selectOption('rating');
   const first = page.locator('.catalog-page .anime-card').first();
-  await expect(first).toHaveAttribute('data-anime-id', 'bgm:1024'); await expect(first.locator('.card-rating')).toHaveText('9.9');
+  await expect(first).toHaveAttribute('data-anime-id', 'bgm:1024'); await expect(first.locator('.card-rating .rating-badge-score')).toHaveText('9.9');
   await expect(page.locator('.catalog-results .section-heading')).toContainText('评分从高到低');
   await page.getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.locator('.catalog-page .anime-card')).toHaveCount(1);

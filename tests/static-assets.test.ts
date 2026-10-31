@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import { listenTestServer } from './support/listen.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -18,7 +20,7 @@ describe('独立静态分发', () => {
     await writeFile(join(retained, 'assets', 'old-12345678.js'), 'export const old=1');
     const service = new AnimeService({ directory });
     const app = createApp(service, current, { publicOrigin: 'https://anime.example.test', assetOrigin: 'https://static.example.test', assetsDirectory: retained });
-    const server = app.listen(0, '127.0.0.1'); servers.push(server); await new Promise<void>(resolve => server.once('listening', resolve));
+    const server = await listenTestServer(createServer(app)); servers.push(server);
     const address = server.address(); if (!address || typeof address === 'string') throw new Error('port'); const base = `http://127.0.0.1:${address.port}`;
     const response = await fetch(base); const html = await response.text();
     expect(html).toContain('https://static.example.test/assets/index-12345678.js'); expect(html).toContain('https://static.example.test/assets/index-12345678.css');

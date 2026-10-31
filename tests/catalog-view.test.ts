@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import { listenTestServer } from './support/listen.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,8 +21,8 @@ async function boot(available = true, overrides?: Overrides) {
   const source = structuredClone(rawCatalog);
   source.items[1]!.broadcast = 'R/2026-10-30T10:00:00Z/P2D';
   source.items.push(
-    { ...structuredClone(source.items[0]), title: '跨季作品', begin: '2026-07-01T00:00:00Z', broadcast: 'R/2026-10-28T12:00:00Z/P7D', sites: [{ site: 'bangumi', id: '3' }] },
-    { ...structuredClone(source.items[0]), title: '元旦单次', begin: '2027-01-01T01:00:00Z', end: '2027-01-01T01:00:00Z', broadcast: '', sites: [{ site: 'bangumi', id: '4' }] },
+    { ...structuredClone(source.items[0]), title: '跨季作品', begin: '2026-07-01T00:00:00Z', broadcast: 'R/2026-10-28T12:00:00Z/P7D', sites: [{ site: 'bangumi', id: '3' }, { site: 'bilibili', id: '3', begin: '2026-07-01T00:00:00Z', broadcast: 'R/2026-10-28T12:00:00Z/P7D' }] },
+    { ...structuredClone(source.items[0]), title: '元旦单次', begin: '2027-01-01T01:00:00Z', end: '2027-01-01T01:00:00Z', broadcast: '', sites: [{ site: 'bangumi', id: '4' }, { site: 'bilibili', id: '4', begin: '2027-01-01T01:00:00Z', broadcast: 'R/2027-01-01T01:00:00Z/P0D' }] },
   );
   const calendar = structuredClone(rawCalendar); calendar[0]!.items.push({ id: 3, type: 2 });
   const overridesPath = join(directory, 'overrides.json'); if (overrides) await writeFile(overridesPath, JSON.stringify(overrides));
@@ -29,7 +31,7 @@ async function boot(available = true, overrides?: Overrides) {
   await service.initialize(); if (available) await service.refresh();
   const staticPath = join(directory, 'static');
   const app = createApp(service, staticPath);
-  server = await new Promise<Server>(resolve => { const listening = app.listen(0, '127.0.0.1', () => resolve(listening)); });
+  server = await listenTestServer(createServer(app));
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing test port');
   return { service, source, url: `http://127.0.0.1:${address.port}`, staticPath, calls: () => upstreamCalls };
 }

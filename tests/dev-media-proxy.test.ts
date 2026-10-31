@@ -1,3 +1,4 @@
+import { listenTestServer } from './support/listen.js';
 import { describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -10,7 +11,7 @@ describe('本地开发媒体入口', () => {
     const directory = await mkdtemp(join(tmpdir(), 'anime-dev-proxy-'));
     await writeFile(join(directory, 'index.html'), '<div>SPA fallback</div>');
     const backend = createServer((req, res) => res.end(`proxied:${req.url}`));
-    backend.listen(0, '127.0.0.1'); await new Promise<void>(resolve => backend.once('listening', resolve));
+    await listenTestServer(backend);
     const address = backend.address(); if (!address || typeof address === 'string') throw new Error('port');
     const vite = await createViteServer({ configFile: false, root: directory, cacheDir: join(directory, 'cache'), logLevel: 'silent', server: { host: '127.0.0.1', port: 0, hmr: false, proxy: Object.fromEntries(Object.keys(config.server?.proxy ?? {}).map(prefix => [prefix, `http://127.0.0.1:${address.port}`])) } });
     try {

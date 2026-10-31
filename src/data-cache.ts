@@ -1,11 +1,11 @@
 export interface CachedData<T> { schemaVersion: 1; savedAt: number; etag: string | null; data: T }
-type CacheKind = 'views' | 'details';
-const limits = { views: 32, details: 128 }, lifetime = 7 * 86_400_000;
+type CacheKind = 'views' | 'details' | 'ratings';
+const limits = { views: 32, details: 128, ratings: 128 }, lifetime = 7 * 86_400_000;
 
 /** Public catalogue data only; personal favorites/preferences use their existing stores. */
 export class DataCache {
-  private memory = { views: new Map<string, CachedData<unknown>>(), details: new Map<string, CachedData<unknown>>() };
-  private queues = { views: Promise.resolve(), details: Promise.resolve() };
+  private memory = { views: new Map<string, CachedData<unknown>>(), details: new Map<string, CachedData<unknown>>(), ratings: new Map<string, CachedData<unknown>>() };
+  private queues = { views: Promise.resolve(), details: Promise.resolve(), ratings: Promise.resolve() };
   private disabled = false;
   private warned = false;
   constructor(private notify: (text: string) => void, private storage: CacheStorage | undefined = globalThis.caches, private now: () => number = Date.now) {}
@@ -40,8 +40,8 @@ export class DataCache {
     while (memory.size > limits[kind]) memory.delete(memory.keys().next().value!);
   }
   private sourceTime(data: unknown) {
-    const value = data as { updatedAt?: string | null; detailFetchedAt?: string; status?: { sources?: Record<string, { fetchedAt?: string | null }> } } | null;
-    const dates = [value?.updatedAt, value?.detailFetchedAt, ...Object.values(value?.status?.sources ?? {}).map(source => source?.fetchedAt)];
+    const value = data as { updatedAt?: string | null; fetchedAt?: string | null; detailFetchedAt?: string; status?: { sources?: Record<string, { fetchedAt?: string | null }> } } | null;
+    const dates = [value?.updatedAt, value?.fetchedAt, value?.detailFetchedAt, ...Object.values(value?.status?.sources ?? {}).map(source => source?.fetchedAt)];
     return Math.max(0, ...dates.map(date => date ? Date.parse(date) : 0).filter(Number.isFinite));
   }
   write<T>(kind: CacheKind, key: string, data: T, etag: string | null): Promise<void> {

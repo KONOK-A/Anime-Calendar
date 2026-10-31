@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +6,7 @@ import { CacheStore } from '../server/cache.js';
 import { UpstreamClient } from '../server/upstream.js';
 import { ResourceCache } from '../server/resources.js';
 const dirs: string[] = [];
-afterEach(async () => { for (const path of dirs.splice(0)) await rm(path, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); for (const path of dirs.splice(0)) await rm(path, { recursive: true, force: true }); });
 async function setup(fetcher: (url: string) => Promise<Response>) {
   const dir = await mkdtemp(join(tmpdir(), 'resource-cache-')); dirs.push(dir); const store = new CacheStore(dir), upstream = new UpstreamClient(fetcher);
   let now = new Date('2026-10-30T00:00:00Z');
@@ -14,6 +14,12 @@ async function setup(fetcher: (url: string) => Promise<Response>) {
 }
 const validate = (raw: unknown) => { if (typeof raw !== 'string') throw new Error('bad'); return raw; };
 describe('资料后台更新', () => {
+  it('成功获取但写盘失败与上游失败分开记录，返回新数据和真实获取时间', async () => {
+    const { store, cache, advance } = await setup(async () => new Response('"new"'));
+    const key = 'detail-cccccccccccccccccccccccc'; await store.write(key, 'old', '2026-10-30T00:00:00Z'); advance();
+    vi.spyOn(store, 'write').mockRejectedValue(new Error('disk full'));
+    expect(await cache.get(key, 'https://example.com/item', validate, true)).toMatchObject({ data: 'new', fetchedAt: '2026-11-01T00:00:00.000Z', errorSource: 'persistence', error: expect.any(String) });
+  });
   it('过期值立即返回，wait加入同一资源任务，成功后返回新值', async () => {
     let release!: () => void, calls = 0;
     const { store, cache, advance } = await setup(async () => { calls++; await new Promise<void>(resolve => { release = resolve; }); return new Response('"new"'); });
@@ -26,7 +32,7 @@ describe('资料后台更新', () => {
   it('失败保留旧资料并冷却，后续读取不会连续轰炸上游', async () => {
     let calls = 0; const { store, cache, advance } = await setup(async () => { calls++; return new Response('', { status: 500 }); });
     const key = 'detail-bbbbbbbbbbbbbbbbbbbbbbbb'; await store.write(key, 'old', '2026-10-30T00:00:00Z'); advance();
-    expect(await cache.get(key, 'https://example.com/item', validate, true)).toMatchObject({ data: 'old', error: expect.any(String) });
+    expect(await cache.get(key, 'https://example.com/item', validate, true)).toMatchObject({ data: 'old', errorSource: 'upstream', error: expect.any(String) });
     expect(await cache.get(key, 'https://example.com/item', validate)).toMatchObject({ data: 'old', revalidating: false }); expect(calls).toBe(1);
   });
 });

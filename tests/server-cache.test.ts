@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CacheStore } from '../server/cache.js';
@@ -8,6 +8,32 @@ afterEach(async () => { for (const path of dirs.splice(0)) await rm(path, { recu
 async function directory() { const path = await mkdtemp(join(tmpdir(), 'server-cache-')); dirs.push(path); return path; }
 const validate = (value: unknown) => { if (typeof value !== 'string') throw new Error('bad data'); return value; };
 describe('持久缓存恢复与容量', () => {
+  it('必要网络排期缓存不按年龄淘汰，在播结束后恢复正常清理', async () => {
+    const dir = await directory(), store = new CacheStore(dir), old = new Date(Date.now() - 100 * 86_400_000);
+    store.retainStreamingSeasons(['2026-2']);
+    await store.write('streaming-2026-2', 'continuing', old.toISOString());
+    await store.write('detail-aaaaaaaaaaaaaaaaaaaaaaaa', 'inactive', old.toISOString());
+    await utimes(join(dir, 'streaming-2026-2.json'), old, old);
+    await utimes(join(dir, 'detail-aaaaaaaaaaaaaaaaaaaaaaaa.json'), old, old);
+    await store.maintain();
+    expect((await store.read('streaming-2026-2', validate))?.data).toBe('continuing');
+    expect(await store.read('detail-aaaaaaaaaaaaaaaaaaaaaaaa', validate)).toBeNull();
+    store.retainStreamingSeasons([]); await store.maintain();
+    expect(await store.read('streaming-2026-2', validate)).toBeNull();
+  });
+  it('容量优先淘汰非必要缓存，必要排期仍受总预算限制', async () => {
+    const dir = await directory(), store = new CacheStore(dir), old = new Date(Date.now() - 100 * 86_400_000);
+    store.retainStreamingSeasons(['2026-2']);
+    await store.write('streaming-2026-2', 'continuing', old.toISOString());
+    await utimes(join(dir, 'streaming-2026-2.json'), old, old);
+    await store.write('detail-aaaaaaaaaaaaaaaaaaaaaaaa', 'newer-but-rebuildable', new Date().toISOString());
+    const budget = Buffer.byteLength(await readFile(join(dir, 'streaming-2026-2.json')));
+    await store.maintain({ maxBytes: budget });
+    expect((await store.read('streaming-2026-2', validate))?.data).toBe('continuing');
+    expect(await store.read('detail-aaaaaaaaaaaaaaaaaaaaaaaa', validate)).toBeNull();
+    expect(await store.derivedBytes()).toBeLessThanOrEqual(budget);
+    await store.maintain({ maxBytes: 0 }); expect(await store.derivedBytes()).toBe(0);
+  });
   it('正常派生缓存写入在本机模式也执行容量预算，无需维护定时器', async () => {
     const dir = await directory(), store = new CacheStore(dir, 250);
     for (const suffix of ['a', 'b', 'c']) await store.write(`detail-${suffix.repeat(24)}`, suffix.repeat(100), '2026-10-30T00:00:00Z');

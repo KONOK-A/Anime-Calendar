@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sortSeasonAnime } from '../src/season-sort';
 import type { Anime, AnimeRating } from '../shared/types';
+import { summarizeRatings } from '../shared/scores';
 const items = Array.from({ length: 25 }, (_, index) => ({ id: `bgm:${index + 1}`, begin: `2026-10-${String(index + 1).padStart(2, '0')}` }) as Anime);
 const rating = (score: number): AnimeRating => ({ score, total: 20, rank: null });
 describe('季度目录排序', () => {
@@ -16,5 +17,9 @@ describe('季度目录排序', () => {
   it('默认首播顺序不受评分影响，重复首播时间按ID', () => {
     const list = [{ ...items[0]!, id: 'bgm:2' }, { ...items[0]!, id: 'bgm:1' }];
     expect(sortSeasonAnime(list, 'premiere', new Map([['bgm:2', rating(10)]])).map(anime => anime.id)).toEqual(['bgm:1', 'bgm:2']);
+  });
+  it('综合分按换算结果排序，未知评分人数不丢分且与卡片口径一致', () => {
+    const scores = new Map([['bgm:2', summarizeRatings([{ provider: 'filmarks', score: 4.4, maxScore: 5, votes: null, url: null, fetchedAt: null, status: 'ready' }])], ['bgm:1', summarizeRatings([{ provider: 'bangumi', score: 8, maxScore: 10, votes: 10, url: null, fetchedAt: null, status: 'ready' }])]]);
+    expect(sortSeasonAnime(items.slice(0, 3), 'rating', scores).map(anime => anime.id)).toEqual(['bgm:2', 'bgm:1', 'bgm:3']);
   });
 });

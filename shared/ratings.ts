@@ -1,4 +1,5 @@
 import type { AnimeRating, SeasonRatings } from './types.js';
+import { validRatingSummary } from './scores.js';
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 export function validRating(value: unknown): value is AnimeRating {
   return record(value) && typeof value.score === 'number' && Number.isFinite(value.score) && value.score > 0 && value.score <= 10 && Number.isSafeInteger(value.total) && Number(value.total) > 0 && (value.rank === null || Number.isSafeInteger(value.rank) && Number(value.rank) > 0);
@@ -10,7 +11,7 @@ export function isSeasonRatings(value: unknown): value is SeasonRatings {
   if (!['loading', 'ready', 'partial'].includes(String(value.status)) || !instant(value.updatedAt) || value.status !== 'loading' && value.updatedAt === null || !Array.isArray(value.entries)) return false;
   const ids = new Set(value.ids), seen = new Set<string>();
   for (const entry of value.entries) {
-    if (!record(entry) || typeof entry.id !== 'string' || !ids.has(entry.id) || seen.has(entry.id) || entry.rating !== null && !validRating(entry.rating) || !instant(entry.fetchedAt) || entry.error !== null && typeof entry.error !== 'string') return false;
+    if (!record(entry) || typeof entry.id !== 'string' || !ids.has(entry.id) || seen.has(entry.id) || entry.rating !== null && !validRating(entry.rating) || entry.summary !== undefined && !validRatingSummary(entry.summary) || !instant(entry.fetchedAt) || entry.error !== null && typeof entry.error !== 'string') return false;
     seen.add(entry.id);
   }
   return value.status === 'loading' || seen.size === ids.size && (value.status !== 'ready' || value.processed === value.total && value.entries.every(entry => (entry as { error: unknown }).error === null));

@@ -9,12 +9,15 @@ import { posterSource } from '../poster-source';
 import Icon from '../components/Icon.vue';
 import SceneBackdrop from '../components/SceneBackdrop.vue';
 import { animateSaved } from '../motion';
+import { resolveRatingSummary } from '../rating-display';
+import RatingBadge from '../components/RatingBadge.vue';
+import RatingPanel from '../components/RatingPanel.vue';
 import '../detail-credits.css';
 const props = defineProps<{ id: string }>(), state = useAppState();
 const anime = computed(() => state.catalog.value?.items.find(x => x.id === props.id));
 const detail = computed(() => state.details.get(props.id));
 const detailError = computed(() => state.detailErrors.get(props.id) || detail.value?.detailError);
-const ratingStatus = computed(() => state.detailLoading.has(props.id) ? '评分载入中' : detail.value?.rating === undefined && detail.value ? '请重启本地服务获取评分' : detailError.value ? '评分暂不可用' : '暂无评分');
+const ratingSummary = computed(() => resolveRatingSummary(undefined, state.ratingSummaries.get(props.id), detail.value?.rating, anime.value?.sourceUrl ?? '', detail.value?.detailFetchedAt));
 const synopsis = computed(() => splitSynopsis(detail.value?.summary ?? ''));
 const credits = computed(() => state.credits.get(props.id));
 const staff = computed(() => credits.value?.staff ?? detail.value?.staff ?? []);
@@ -52,7 +55,11 @@ function describeRule(rule: AiringRule | undefined) {
   const weekday = new Intl.DateTimeFormat('zh-CN', { timeZone: state.timezone.value, weekday: 'long' }).format(new Date(rule.anchor));
   return rule.frequency === 'weekly' ? `每${weekday} ${formatClock(rule.anchor, state.timezone.value)}` : rule.frequency === 'daily' ? `每天 ${formatClock(rule.anchor, state.timezone.value)}` : rule.frequency === 'once' ? '仅有单次 / 首播排期' : '来源周期暂不支持自动推算';
 }
-const ruleLabel = computed(() => describeRule(anime.value?.rule));
+const ruleLabel = computed(() => {
+  const rules = anime.value?.networkAiring?.rules?.length ? anime.value.networkAiring.rules : [anime.value?.rule];
+  const regular = rules.filter(rule => rule?.anchor && (rule.frequency === 'weekly' || rule.frequency === 'daily'));
+  return [...new Set((regular.length ? regular : rules).map(describeRule))].join('、');
+});
 const broadcastLabel = computed(() => describeRule(anime.value?.broadcastRule));
 async function retryDetail() {
   const id = props.id;
@@ -68,15 +75,16 @@ function expandCharacters(event: Event) {
   <section class="detail-page"><a :href="state.browse.detailFrom" class="back-link"><Icon name="back" :size="16" />{{ backLabel }}</a>
     <div v-if="anime && entryReady" class="detail-layout">
       <header class="detail-hero"><div class="detail-image-wash" aria-hidden="true"><img v-if="detail?.image" :key="`${id}:${detail.image}`" :src="posterSource(id, 'hero', detail.image, detail.detailFetchedAt) ?? undefined" alt="" @error="hideWash" /></div><SceneBackdrop variant="detail" :media-type="anime.type" :season="anime.season" /><div class="detail-cover"><Poster :id="id" :revision="detail?.detailFetchedAt" size="hero" :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" priority /></div>
-        <div class="detail-heading"><div class="detail-kicker"><span class="type-badge">{{ anime.type.toUpperCase() }}</span><span>{{ seasonLabel(anime.season) }}</span><span v-if="detail?.episodes">{{ detail.episodes }} 集</span></div><h1>{{ anime.title }}</h1><p class="detail-original">{{ anime.originalTitle }}</p><div class="detail-rating-row"><a v-if="detail?.rating" class="detail-rating" :href="anime.sourceUrl" target="_blank" rel="noopener noreferrer" title="Bangumi 评分"><Icon name="star" :size="17" /><strong>{{ detail.rating.score.toFixed(1) }}</strong><span class="rating-scale">/10</span><span>Bangumi评分</span><span class="rating-votes">{{ detail.rating.total.toLocaleString('zh-CN') }} 人</span><span v-if="detail.rating.rank" class="rating-rank">排名 {{ detail.rating.rank }}</span></a><span v-else class="detail-rating unrated"><Icon name="star" :size="15" />{{ ratingStatus }}</span></div><p class="detail-airing-summary"><Icon name="clock" :size="17" />{{ ruleLabel }}<span v-if="anime.networkAiring" class="network-badge">网络先行</span></p>
+        <div class="detail-heading"><div class="detail-kicker"><span class="type-badge">{{ anime.type.toUpperCase() }}</span><span>{{ seasonLabel(anime.season) }}</span><span v-if="detail?.episodes">{{ detail.episodes }} 集</span></div><h1>{{ anime.title }}</h1><p class="detail-original">{{ anime.originalTitle }}</p><div class="detail-rating-row"><RatingBadge :summary="ratingSummary" variant="detail" :loading="state.ratingsLoading.has(id)" /></div><p class="detail-airing-summary"><Icon name="clock" :size="17" />{{ ruleLabel }}<span v-if="anime.networkAiring" class="network-badge">网络配信</span></p>
           <div class="detail-actions"><button ref="followButton" class="button primary follow-button" :class="{ followed: saved }" :aria-pressed="saved" @click="toggleSaved"><Icon :name="saved ? 'check' : 'bookmark'" :size="18" />{{ saved ? '已在追番' : '加入追番' }}</button><button v-if="anime.platforms.length" class="button website-button" @click="showPlatforms">查看播放平台<Icon name="chevron" :size="15" /></button><a v-if="anime.officialSite" class="button website-button" :href="anime.officialSite" target="_blank" rel="noopener noreferrer">作品官网<Icon name="external" :size="15" /></a></div>
           <div class="detail-tags"><span v-for="tag in (detail?.tags ?? [])" :key="tag">{{ tag }}</span></div>
         </div>
       </header>
+      <RatingPanel :key="id" :summary="ratingSummary" :loading="state.ratingsLoading.has(id)" :error="state.ratingErrors.get(id)" @retry="state.loadRatings(id, true)" />
       <div class="detail-content">
         <section class="detail-section story-section"><h2>故事简介</h2><p v-if="synopsis.summary" class="synopsis">{{ synopsis.summary }}</p><details v-if="synopsis.original" :key="`original-${id}`" class="synopsis-original"><summary>简介原文</summary><p class="synopsis" lang="ja">{{ synopsis.original }}</p></details><div v-if="!detail?.summary && state.detailLoading.has(id)" class="loading-copy">正在读取作品信息…</div><p v-else-if="!detail?.summary && !detailError" class="muted">暂无简介。</p><div v-if="detailError" class="inline-error"><p>{{ detailError }}</p><button class="text-button" :disabled="state.detailLoading.has(id)" @click="retryDetail">重试详情</button></div></section>
         <aside class="detail-reference" aria-label="放送与播放平台">
-        <section class="detail-section airing-section"><h2>放送信息</h2><dl class="detail-facts"><div><dt>默认播出时间</dt><dd>{{ ruleLabel }}</dd></div><div v-if="anime.networkAiring"><dt>采用平台</dt><dd><a :href="anime.networkAiring.sourceUrl" target="_blank" rel="noopener noreferrer">{{ anime.networkAiring.platform }}</a>（{{ anime.networkAiring.regions.length ? anime.networkAiring.regions.join(' / ') : '地区以平台为准' }}）</dd></div><div v-if="anime.networkAiring"><dt>网络开播日期</dt><dd>{{ dateLabel(anime.networkAiring.begin) }}</dd></div><div v-if="anime.networkAiring"><dt>原放送参考</dt><dd>{{ broadcastLabel }}</dd></div><div><dt>原来源开播日期</dt><dd>{{ dateLabel(anime.begin) }}</dd></div><div><dt>当前显示时区</dt><dd>{{ state.timezone.value === 'Asia/Shanghai' ? '北京时间 UTC+8' : '日本时间 UTC+9' }}</dd></div><div><dt>条目收录集数</dt><dd>{{ detail?.episodes ? `${detail.episodes} 集` : '尚未收录' }}</dd></div></dl><details class="schedule-basis"><summary>排期依据</summary><p>周期排期按来源推算，实际安排以官网为准。</p><p v-if="anime.scheduleNote" class="source-note">{{ anime.scheduleNote }} <a :href="anime.scheduleSource" target="_blank" rel="noopener noreferrer">查看依据</a></p></details></section>
+        <section class="detail-section airing-section"><h2>放送信息</h2><dl class="detail-facts"><div><dt>默认播出时间</dt><dd>{{ ruleLabel }}</dd></div><div v-if="anime.networkAiring"><dt>采用平台</dt><dd><a :href="anime.networkAiring.sourceUrl" target="_blank" rel="noopener noreferrer">{{ anime.networkAiring.platform }}</a>（{{ anime.networkAiring.regions.length ? anime.networkAiring.regions.join(' / ') : '地区以平台为准' }}）</dd></div><div v-if="anime.networkAiring"><dt>网络开播日期</dt><dd>{{ dateLabel(anime.networkAiring.begin) }}</dd></div><div v-if="anime.broadcastRule.anchor || anime.broadcastRule.raw"><dt>原放送参考</dt><dd>{{ broadcastLabel }}</dd></div><div><dt>原来源开播日期</dt><dd>{{ dateLabel(anime.begin) }}</dd></div><div><dt>当前显示时区</dt><dd>{{ state.timezone.value === 'Asia/Shanghai' ? '北京时间 UTC+8' : '日本时间 UTC+9' }}</dd></div><div><dt>条目收录集数</dt><dd>{{ detail?.episodes ? `${detail.episodes} 集` : '尚未收录' }}</dd></div></dl><details class="schedule-basis"><summary>排期依据</summary><p>周期排期按来源推算，实际安排以官网为准。</p><p v-if="anime.scheduleNote" class="source-note">{{ anime.scheduleNote }} <a :href="anime.scheduleSource" target="_blank" rel="noopener noreferrer">查看依据</a></p></details></section>
         <section class="detail-section platforms-section"><h2 ref="platformsHeading" tabindex="-1">播放平台 <span class="heading-count">{{ anime.platforms.length }}</span></h2><div v-if="anime.platforms.length" class="platform-list"><a v-for="platform in anime.platforms" :key="`${platform.name}:${platform.url}:${platform.regions.join(',')}`" :href="platform.url" target="_blank" rel="noopener noreferrer"><span><strong>{{ platform.name }}</strong><small>{{ platform.regions.length ? `地区：${platform.regions.join(' / ')}` : '地区限制以平台为准' }}</small></span><Icon name="external" :size="16" /></a></div><p v-else class="muted">尚未收录播放平台，可前往作品官网查看。</p></section>
         </aside>
         <section class="detail-section credits-section" aria-label="制作与角色配音">

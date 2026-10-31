@@ -61,6 +61,13 @@ export function normalizeCatalog(input: unknown): CatalogBase {
     const sites = raw.sites.filter(isRecord);
     const bgm = sites.find(x => x.site === 'bangumi');
     const bangumiId = bgm && /^\d+$/.test(String(bgm.id)) && Number(bgm.id) > 0 ? Number(bgm.id) : null;
+    const externalIds: NonNullable<Anime['externalIds']> = {};
+    for (const site of sites) {
+      const externalId = Number(site.id);
+      if (!/^\d+$/.test(String(site.id)) || !Number.isSafeInteger(externalId) || externalId <= 0) continue;
+      if (site.site === 'myanimelist' || site.site === 'mal') externalIds.mal ??= externalId;
+      if (site.site === 'anilist' || site.site === 'aniList') externalIds.aniList ??= externalId;
+    }
     const officialSite = safeUrl(raw.officialSite);
     const id = bangumiId ? `bgm:${bangumiId}` : `bd:${createHash('sha256').update(JSON.stringify([raw.type, originalTitle, text(raw.officialSite)])).digest('hex').slice(0, 24)}`;
     if (ids.has(id)) { warnings.push(`重复或冲突ID：${id}，保留首条`); continue; }
@@ -82,16 +89,22 @@ export function normalizeCatalog(input: unknown): CatalogBase {
       const rawPeriod = text(site.broadcast);
       const rule = parseNetworkRule(rawPeriod, text(site.begin), text(site.end), begin, broadcastRule);
       const networkBegin = instant(site.begin) ?? rule.anchor;
-      if (rawPeriod.startsWith('R/') && rule.anchor && networkBegin && premiere && Date.parse(networkBegin) < Date.parse(premiere) && rule.frequency !== 'unknown') {
-        const distance = Math.abs(Date.parse(networkBegin) - Date.parse(premiere));
-        const reused = sharedAnchors.get(airingKey(site, rule.anchor))?.some(other => Math.abs(Date.parse(networkBegin) - other) < distance);
+      if (rawPeriod.startsWith('R/') && rule.anchor && networkBegin && rule.frequency !== 'unknown') {
+        const distance = premiere ? Math.abs(Date.parse(networkBegin) - Date.parse(premiere)) : 0;
+        const olderSeason = premiere && Math.max(Date.parse(networkBegin), Date.parse(rule.anchor)) < Date.parse(premiere) - 183 * 86_400_000;
+        const reused = olderSeason || sharedAnchors.get(airingKey(site, rule.anchor))?.some(other => Math.abs(Date.parse(networkBegin) - other) < distance);
         if (reused) warnings.push(`${id} ${platform.name} 的周期疑似来自共用播放页的旧季，未采用。`);
         else candidates.push({ platform: platform.name, regions: platform.regions, begin: networkBegin, rule, sourceUrl: url });
       }
       return [platform];
     });
+    // A Web animation's own explicit release rule describes its network release.
+    // A TV rule remains a separate reference when no streaming time is known.
+    if (!candidates.length && raw.type === 'web' && broadcastRule.anchor) {
+      candidates.push({ platform: '官方网络发行', regions: [], begin: premiere ?? broadcastRule.anchor, rule: { ...broadcastRule }, sourceUrl: officialSite ?? (bangumiId ? `https://bgm.tv/subject/${bangumiId}` : 'https://github.com/bangumi-data/bangumi-data') });
+    }
     const networkAiring = candidates.sort((a, b) => Date.parse(a.begin) - Date.parse(b.begin))[0];
-    items.push({ id, bangumiId, title: typeof chinese === 'string' ? chinese : originalTitle, originalTitle, aliases: [...new Set([originalTitle, ...translations])], type: raw.type, begin, season: seasonFrom(begin), officialSite, platforms, rule: networkAiring?.rule ?? broadcastRule, broadcastRule: { ...broadcastRule }, ...(networkAiring ? { networkAiring } : {}), sourceUrl: bangumiId ? `https://bgm.tv/subject/${bangumiId}` : 'https://github.com/bangumi-data/bangumi-data' });
+    items.push({ id, bangumiId, title: typeof chinese === 'string' ? chinese : originalTitle, originalTitle, aliases: [...new Set([originalTitle, ...translations])], type: raw.type, begin, season: seasonFrom(begin), officialSite, platforms, rule: networkAiring?.rule ?? { anchor: null, frequency: 'unknown', raw: '', end: null }, broadcastRule: { ...broadcastRule }, ...(networkAiring ? { networkAiring } : {}), ...(Object.keys(externalIds).length ? { externalIds } : {}), sourceUrl: bangumiId ? `https://bgm.tv/subject/${bangumiId}` : 'https://github.com/bangumi-data/bangumi-data' });
   }
   if (!items.length) throw new Error('目录中没有有效的日语TV/Web条目，旧数据已保留');
   return { items, warnings };

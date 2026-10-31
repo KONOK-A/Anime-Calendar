@@ -6,7 +6,7 @@ import { isRecord } from './normalize.js';
 export interface Validators { etag?: string; lastModified?: string }
 interface Envelope { version: 1; fetchedAt: string; data: unknown; validators?: Validators }
 export interface CacheValue<T> { data: T; fetchedAt: string; raw: unknown; validators?: Validators }
-const derived = /^(detail-[a-f0-9]{24}|credits-(persons|characters)-\d+|character-name-\d+)$/;
+const derived = /^(detail-[a-f0-9]{24}|credits-(persons|characters)-\d+|character-name-\d+|ratings-(mal|filmarks|anilist)-[a-f0-9]{24}|streaming-\d{4}-[1-4])$/;
 const sourceKey = (key: string) => key === 'catalog' || key === 'calendar';
 export async function atomicWrite(path: string, bytes: string | Uint8Array) {
   const temporary = `${path}.${randomUUID()}.tmp`;
@@ -23,11 +23,16 @@ export class CacheStore {
   private hotBytes = 0;
   private readonly validSources = new Map<string, Envelope>();
   private readonly writes = new Map<string, Promise<void>>();
+  private readonly retainedStreaming = new Set<string>();
   private derivedWritten = 0;
   private swept = false;
   private sweeping: Promise<void> | undefined;
   revision = 0;
   constructor(private readonly directory: string, private readonly maxDerivedBytes = 256 * 1024 * 1024) {}
+  retainStreamingSeasons(seasons: Iterable<string>) {
+    const keys = [...seasons].map(season => { if (!/^20\d{2}-[1-4]$/.test(season)) throw new Error('网络排期缓存季度无效'); return `streaming-${season}`; });
+    this.retainedStreaming.clear(); for (const key of keys) this.retainedStreaming.add(key);
+  }
   get warnings(): string[] { return [...this.problems.values()]; }
   private issue(key: string, message?: string) {
     if (message === this.problems.get(key)) return;
@@ -113,8 +118,8 @@ export class CacheStore {
   }
   async derivedBytes() { return (await this.entries()).reduce((total, entry) => total + entry.size, 0); }
   async maintain({ maxBytes = 256 * 1024 * 1024, now = Date.now() } = {}) {
-    const entries = (await this.entries()).sort((a, b) => a.at - b.at); let total = entries.reduce((value, entry) => value + entry.size, 0);
-    for (const entry of entries) if (total > maxBytes || now - entry.at > 90 * 86_400_000) {
+    const entries = (await this.entries()).sort((a, b) => Number(this.retainedStreaming.has(a.key)) - Number(this.retainedStreaming.has(b.key)) || a.at - b.at); let total = entries.reduce((value, entry) => value + entry.size, 0);
+    for (const entry of entries) if (total > maxBytes || !this.retainedStreaming.has(entry.key) && now - entry.at > 90 * 86_400_000) {
       if (this.writes.has(entry.key)) continue;
       await unlink(entry.path).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });
       this.hot.delete(entry.key); this.hotBytes -= this.hotSizes.get(entry.key) ?? 0; this.hotSizes.delete(entry.key); total -= entry.size;

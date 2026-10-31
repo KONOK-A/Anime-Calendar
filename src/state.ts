@@ -8,7 +8,13 @@ import type { CatalogColumns, WeeklyLayout } from './presentation';
 import { DataCache, type CachedData } from './data-cache';
 import { isAnimeDetail, isCatalogView } from './data-validation';
 import { catalogRequests, type CatalogRequest } from './catalog-requests';
-import { createSeasonRatings } from './season-ratings';
+import { createSeasonRatings, ratingItemIdentity, ratingMatchesItem } from './season-ratings';
+import { summarizeRatings, validRatingSummary, type RatingSummary } from '../shared/scores';
+
+type AnimeRatings = RatingSummary & { id: string };
+function isAnimeRatings(value: unknown): value is AnimeRatings {
+  return validRatingSummary(value) && 'id' in value && typeof value.id === 'string' && /^(bgm:\d+|bd:[\w-]+)$/.test(value.id);
+}
 
 const storage = { getItem: (key: string) => window.localStorage.getItem(key), setItem: (key: string, value: string) => window.localStorage.setItem(key, value) };
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
@@ -29,6 +35,8 @@ export function createAppState() {
   const catalogColumns = ref<CatalogColumns>(4);
   const details = reactive(new Map<string, AnimeDetail>()), detailLoading = reactive(new Set<string>()), detailErrors = reactive(new Map<string, string>());
   const pending = new Map<string, Promise<void>>();
+  const ratingSummaries = reactive(new Map<string, RatingSummary>()), ratingsLoading = reactive(new Set<string>()), ratingErrors = reactive(new Map<string, string>());
+  const pendingRatings = new Map<string, { identity: string; controller: AbortController; task: Promise<void> }>(), ratingIdentities = new Map<string, string>();
   const missingDetails = new Set<string>();
   const credits = reactive(new Map<string, AnimeCredits>()), creditsLoading = reactive(new Set<string>()), creditsErrors = reactive(new Map<string, string>());
   const pendingCredits = new Map<string, Promise<void>>();
@@ -75,7 +83,9 @@ export function createAppState() {
   function applyViews(views: CatalogView[], cached: boolean, extraItems: Anime[] = []) {
     const last = views.at(-1); if (!last?.catalog) return;
     const byId = new Map(extraItems.map(item => [item.id, item]));
+    const changedRatings = new Set<string>();
     for (const view of views) for (const item of view.catalog?.items ?? []) {
+      if (ratingItemIdentity(knownItems.get(item.id) ?? details.get(item.id)) !== ratingItemIdentity(item) && (ratingSummaries.has(item.id) || pendingRatings.has(item.id))) changedRatings.add(item.id);
       byId.set(item.id, item); knownItems.set(item.id, item);
       if (missingDetails.delete(item.id)) detailErrors.delete(item.id);
     }
@@ -89,6 +99,7 @@ export function createAppState() {
     seasons.value = last.seasons;
     missingIds.value = [...new Set(views.flatMap(view => view.missingIds ?? []))];
     for (const id of missingIds.value) knownItems.delete(id);
+    for (const id of changedRatings) { ratingSummaries.delete(id); ratingIdentities.delete(id); void loadRatings(id, true); }
   }
   function fetchView(request: CatalogRequest, previous: CachedData<CatalogView> | undefined, force: boolean) {
     const key = `${request.scope.key}|${force ? 'force' : previous?.etag ?? ''}`;
@@ -133,7 +144,7 @@ export function createAppState() {
     if (seeded && catalog.value) catalog.value = { ...catalog.value, items: seedItems };
     loading.value = !catalog.value; viewError.value = null; unresolvedIds.value = []; missingIds.value = [];
     if (!requests.length) { loading.value = false; return; }
-    const cached = await Promise.all(requests.map(request => cache.read('views', request.scope.key, isCatalogView)));
+    const cached = await Promise.all(requests.map(request => cache.read('views', request.scope.key, (value): value is CatalogView => isCatalogView(value) && value.catalog?.schedulePolicy === 'streaming')));
     if (!current()) return;
     const available = cached.flatMap(entry => entry?.data.catalog ? [entry.data] : []);
     if (available.length) applyViews(available, true, retainCollection ? (catalog.value?.items ?? []).filter(item => favorites.value.includes(item.id)) : seedItems);
@@ -194,7 +205,63 @@ export function createAppState() {
     } catch (error) { notify((error as Error).message, 'error'); }
   }
   function relevant(id: string) { return !!catalog.value?.items.some(item => item.id === id); }
+  function ratingItem(id: string) { return knownItems.get(id) ?? details.get(id); }
+  function loadRatings(id: string, force = false): Promise<void> {
+    const item = ratingItem(id), identity = ratingItemIdentity(item), pending = pendingRatings.get(id);
+    if (pending?.identity === identity && !pending.controller.signal.aborted) return pending.task;
+    pending?.controller.abort('rating-identity-changed');
+    const known = ratingSummaries.get(id);
+    if (!force && known && ratingIdentities.get(id) === identity && !known.revalidating && !known.retryAfterMs && known.fetchedAt && Date.now() - Date.parse(known.fetchedAt) < 24 * 3_600_000 && !known.sources.some(source => source.status === 'unavailable')) return Promise.resolve();
+    if (ratingIdentities.get(id) !== identity) ratingSummaries.delete(id);
+    ratingsLoading.add(id); ratingErrors.delete(id);
+    const controller = new AbortController(), deadline = Date.now() + 180_000; controllers.add(controller);
+    const current = () => !disposed && !controller.signal.aborted && ratingItemIdentity(ratingItem(id)) === identity && pendingRatings.get(id)?.controller === controller;
+    const apply = (value: unknown) => {
+      if (!isAnimeRatings(value) || value.id !== id) throw new Error('评分资料格式或作品关联无效。');
+      if (!current()) return value;
+      const previous = new Map(ratingSummaries.get(id)?.sources.map(source => [source.provider, source]));
+      let retained = false;
+      const sources = value.sources.map(source => {
+        const old = previous.get(source.provider);
+        if (source.status !== 'unavailable' || !source.url || old?.url !== source.url || old.status !== 'ready' || old.score === null) return source;
+        retained = true; return { ...old, error: source.error ?? '来源暂不可用，当前显示上次取得的评分。' };
+      });
+      const data: AnimeRatings = retained ? { id, ...summarizeRatings(sources, undefined, value.revalidating === true), ...(value.retryAfterMs ? { retryAfterMs: value.retryAfterMs } : {}) } : value;
+      if (retained) ratingErrors.set(id, '部分来源暂不可用，已保留已有评分。'); else ratingErrors.delete(id);
+      ratingSummaries.set(id, data); ratingIdentities.set(id, identity);
+      const saved = { ...data, revalidating: false }; delete saved.retryAfterMs;
+      void cache.write('ratings', id, saved, null);
+      return data;
+    };
+    const task = (async () => {
+      const cached = await cache.read('ratings', id, (value): value is AnimeRatings => isAnimeRatings(value) && ratingMatchesItem(value, item));
+      if (!current()) return;
+      if (cached) { const restored = { ...cached.data, revalidating: false }; delete restored.retryAfterMs; ratingSummaries.set(id, restored); ratingIdentities.set(id, identity); }
+      let latest = apply(await json(`/api/anime/${encodeURIComponent(id)}/ratings`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18_000)]) }));
+      let nextConfirmation = Date.now();
+      while (current() && relevant(id) && (latest.revalidating || latest.retryAfterMs)) {
+        const delay = latest.revalidating ? Math.max(0, nextConfirmation - Date.now()) : latest.retryAfterMs!;
+        if (delay >= deadline - Date.now()) break;
+        confirmations.add(controller);
+        if (delay) await new Promise<void>((resolve, reject) => {
+          const finish = () => { controller.signal.removeEventListener('abort', abort); resolve(); };
+          const timer = setTimeout(finish, delay);
+          const abort = () => { clearTimeout(timer); controller.signal.removeEventListener('abort', abort); reject(controller.signal.reason); };
+          controller.signal.addEventListener('abort', abort, { once: true });
+          if (controller.signal.aborted) abort();
+        });
+        if (!current() || !relevant(id)) break;
+        nextConfirmation = Date.now() + 1000;
+        latest = apply(await json(`/api/anime/${encodeURIComponent(id)}/ratings?wait=1`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(Math.max(1, Math.min(18_000, deadline - Date.now())))]) }));
+      }
+      if (current() && relevant(id) && (latest.revalidating || latest.retryAfterMs)) ratingErrors.set(id, '部分来源暂未取得，可稍后重试。');
+    })().catch(error => {
+      if (current()) ratingErrors.set(id, `评分暂未更新：${(error as Error).message}`);
+    }).finally(() => { confirmations.delete(controller); controllers.delete(controller); if (pendingRatings.get(id)?.controller === controller) { pendingRatings.delete(id); ratingsLoading.delete(id); } });
+    pendingRatings.set(id, { identity, controller, task }); return task;
+  }
   function loadDetail(id: string, force = false): Promise<void> {
+    if (ratingItem(id)) void loadRatings(id);
     if (pending.has(id)) return pending.get(id)!;
     const cached = details.get(id);
     if (!force && cached && (!cached.bangumiId || !cached.detailError && !cached.revalidating && cached.detailFetchedAt && Date.now() - Date.parse(cached.detailFetchedAt) < 24 * 3_600_000)) return Promise.resolve();
@@ -224,7 +291,7 @@ export function createAppState() {
           if (!latest.detailError && latest.revalidating !== true) void cache.write('details', id, latest, null);
         }
       } finally { confirmations.delete(controller); controllers.delete(controller); }
-    })().catch(error => { if (!disposed && activeController?.signal.reason !== 'route-changed') { if (error.statusCode === 404) missingDetails.add(id); detailErrors.set(id, `详情请求失败：${(error as Error).message}`); } }).finally(() => { pending.delete(id); detailLoading.delete(id); });
+    })().catch(error => { if (!disposed && activeController?.signal.reason !== 'route-changed') { if (error.statusCode === 404) missingDetails.add(id); detailErrors.set(id, `详情请求失败：${(error as Error).message}`); } }).finally(() => { pending.delete(id); detailLoading.delete(id); if (!disposed && !missingDetails.has(id) && relevant(id)) void loadRatings(id); });
     pending.set(id, task); return task;
   }
   function loadCredits(id: string, force = false): Promise<void> {
@@ -306,7 +373,7 @@ export function createAppState() {
     const blob = new Blob([exportBackup(favorites.value, new Date().toISOString())], { type: 'application/json' });
     const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = `anime-calendar-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return { catalog, status, seasons, seasonRatings, loading, missingIds, unresolvedIds, viewError, loadPage, retryView, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
+  return { catalog, status, seasons, seasonRatings, ratingSummaries, ratingsLoading, ratingErrors, loadRatings, loading, missingIds, unresolvedIds, viewError, loadPage, retryView, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
 }
 export type AppState = ReturnType<typeof createAppState>;
 export const appKey: InjectionKey<AppState> = Symbol('anime-calendar');

@@ -22,6 +22,11 @@ describe('持久页面缓存格式', () => {
     Object.assign(original.catalog.items[0]!, { networkAiring: { platform: '网络平台', begin: '2026-10-29T04:00:00Z', sourceUrl: 'https://example.com', rule: original.catalog.items[0]!.rule } });
     expect(isCatalogView(original)).toBe(false);
   });
+  it('损坏的补充网络周期不会进入排期展开', () => {
+    const original = view();
+    Object.assign(original.catalog.items[0]!, { networkAiring: { platform: '网络平台', regions: ['JP'], begin: '', sourceUrl: 'https://example.com', rule: original.catalog.items[0]!.rule, rules: {} } });
+    expect(isCatalogView(original)).toBe(false);
+  });
   it('ID查询必须显式给出缺失集合，不能把省略当作全部已关联', () => {
     const original = { ...view(), scope: { type: 'items', ids: ['bgm:1'], key: 'items:bgm:1' } };
     expect(isCatalogView(original)).toBe(false);

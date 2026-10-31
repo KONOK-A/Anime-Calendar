@@ -8,7 +8,7 @@ export const rawCatalog = {
     title: 'テストの旅', titleTranslate: { 'zh-Hans': ['星旅', '星之旅'], en: ['A journey'] },
     type: 'tv', lang: 'ja', officialSite: 'https://example.com/anime',
     begin: '2026-10-19T15:30:00Z', broadcast: 'R/2026-10-19T15:30:00Z/P7D', end: '',
-    sites: [{ site: 'bangumi', id: '1' }, { site: 'bilibili', id: '10', url: 'https://www.bilibili.com/bangumi/play/ss10', regions: ['TW'] }, { site: 'resource', id: '1' }],
+    sites: [{ site: 'bangumi', id: '1' }, { site: 'bilibili', id: '10', url: 'https://www.bilibili.com/bangumi/play/ss10', regions: ['TW'], begin: '2026-10-19T15:30:00Z', broadcast: 'R/2026-10-19T15:30:00Z/P7D' }, { site: 'resource', id: '1' }],
   }, {
     title: '帰り道', titleTranslate: {}, type: 'web', lang: 'ja', officialSite: '',
     begin: '2026-10-30T10:00:00Z', broadcast: 'R/2026-10-30T10:00:00Z/P0D', end: '',

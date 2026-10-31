@@ -2,7 +2,7 @@ import type { CacheValue } from './cache.js';
 import { CacheStore } from './cache.js';
 import { UpstreamClient, UpstreamError } from './upstream.js';
 
-export interface ResourceValue<T> { data: T | null; fetchedAt: string | null; error: string | null; revalidating: boolean }
+export interface ResourceValue<T> { data: T | null; fetchedAt: string | null; error: string | null; errorSource?: 'upstream' | 'persistence'; revalidating: boolean }
 export class ResourceCache {
   private readonly pending = new Map<string, Promise<ResourceValue<unknown>>>();
   private readonly failures = new Map<string, { until: number; error: string }>();
@@ -16,7 +16,7 @@ export class ResourceCache {
     if (existing) { if (wait || !cached) { this.upstream.promote(url); return existing; } return { ...fallback, revalidating: true }; }
     if (cached && this.now().getTime() - Date.parse(cached.fetchedAt) < 24 * 3_600_000) return fallback;
     const failure = this.failures.get(key);
-    if (failure && failure.until > this.now().getTime()) return { ...fallback, error: failure.error };
+    if (failure && failure.until > this.now().getTime()) return { ...fallback, error: failure.error, errorSource: 'upstream' };
     this.failures.delete(key);
     const task = this.load(key, url, validate, cached, !!cached && !wait);
     this.pending.set(key, task);
@@ -29,7 +29,7 @@ export class ResourceCache {
       const response = await this.upstream.request(url, { background }), raw: unknown = JSON.parse(response.bytes.toString('utf8')), data = validate(raw), fetchedAt = this.now().toISOString();
       let error: string | null = null;
       try { await this.store.write(key, raw, fetchedAt); } catch { error = '资料已更新，但缓存未保存。'; }
-      this.failures.delete(key); return { data, fetchedAt, error, revalidating: false };
+      this.failures.delete(key); return { data, fetchedAt, error, ...(error ? { errorSource: 'persistence' as const } : {}), revalidating: false };
     } catch (error) {
       const message = `资料更新失败：${error instanceof Error ? error.message : '未知错误'}。可稍后重试。`;
       if (!(error instanceof Error) || !/队列|排队/.test(error.message)) {
@@ -37,7 +37,7 @@ export class ResourceCache {
         this.failures.set(key, { until: this.now().getTime() + retry, error: message });
         if (this.failures.size > 256) this.failures.delete(this.failures.keys().next().value!);
       }
-      return { data: cached?.data ?? null, fetchedAt: cached?.fetchedAt ?? null, error: message, revalidating: false };
+      return { data: cached?.data ?? null, fetchedAt: cached?.fetchedAt ?? null, error: message, errorSource: 'upstream', revalidating: false };
     }
   }
   async drain() {
