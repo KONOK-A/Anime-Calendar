@@ -53,7 +53,7 @@ onUnmounted(() => { observer?.disconnect(); feedback?.cancel(); });
   <article ref="element" class="anime-card" :data-anime-id="anime.id" :class="{ compact, cancelled: event?.status === 'cancelled', 'lightframe-schedule': lightframe, 'lightframe-poster': !compact && !showNextAiring, 'lightframe-collection': showNextAiring }" @pointermove="pointer.move" @pointerleave="pointer.reset">
     <span v-if="framed" class="card-edge-glow" aria-hidden="true" />
     <div v-if="event" class="event-time"><time :datetime="event.at">{{ formatClock(event.at, state.timezone.value) }}</time><RatingBadge v-if="compact && ratingSummary?.score != null" class="card-rating compact-rating" :summary="ratingSummary" /><span v-if="event.status === 'cancelled' || event.basis !== 'estimated'" class="basis" :class="{ official: event.basis === 'official', hiatus: event.status === 'cancelled' }">{{ event.status === 'cancelled' ? '休播' : event.basis === 'official' ? '公告' : '来源排期' }}</span></div>
-    <a :href="`#/anime/${anime.id}`" :aria-label="`查看${anime.title}${showcase ? '海报' : ''}详情`" class="anime-link">
+    <a :href="`#/anime/${anime.id}`" :aria-label="`查看${anime.title}${showcase ? '海报' : ''}详情`" :title="anime.originalTitle === anime.title ? anime.title : `${anime.title} / ${anime.originalTitle}`" class="anime-link">
       <div class="poster-frame"><Poster :id="anime.id" :revision="detail?.detailFetchedAt" :size="compact ? 'thumb' : 'card'" :image="detail?.image" :title="anime.title" :theme="state.appearance.theme.value" /><RatingBadge v-if="!compact && ratingSummary?.score != null" class="card-rating" :summary="ratingSummary" /></div>
       <div class="card-copy"><h3 :title="anime.title">{{ anime.title }}</h3><p v-if="!compact && anime.originalTitle !== anime.title" class="original-title" :title="anime.originalTitle">{{ anime.originalTitle }}</p><div class="card-tags"><span class="card-type">{{ anime.type.toUpperCase() }}</span><span v-if="adaptation" class="card-adaptation">{{ adaptation }}</span><span v-if="event && anime.season !== state.currentSeason.value" class="continuing">续播</span><span v-if="!event && !showNextAiring" class="card-begin">{{ beginDate.replaceAll('-', '.') }}</span></div></div>
       <div v-if="showNextAiring" class="next-airing" :class="{ pending: !nextEvent }"><span><Icon name="clock" :size="13" />{{ nextEvent ? '下次放送' : '排期参考' }}</span><p v-if="nextEvent"><span class="next-date">{{ nextLabel.split(' ')[0] }}</span>{{ ' ' }}<time :datetime="nextEvent.at">{{ formatClock(nextEvent.at, state.timezone.value) }}</time></p><p v-else>{{ nextLabel }}</p><small v-if="nextEvent" class="next-weekday">{{ nextWeekday }}<span v-if="nextEvent.basis !== 'estimated'"> · {{ nextEvent.basis === 'official' ? '公告' : '来源排期' }}</span></small></div>
@@ -64,6 +64,9 @@ onUnmounted(() => { observer?.disconnect(); feedback?.cancel(); });
 </template>
 
 <style scoped>
+.anime-card{isolation:isolate}
+.anime-card>.anime-link:after{content:'';position:absolute;inset:0;z-index:1;border-radius:inherit}
+.anime-card>.save-card{z-index:2}
 .card-edge-glow{display:none;position:absolute;inset:0;pointer-events:none;border:1px solid transparent;border-radius:inherit;overflow:hidden;z-index:3;opacity:0;transition:opacity .18s,display .18s allow-discrete;mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);mask-composite:exclude}
 .card-edge-glow:before{content:'';position:absolute;left:0;top:0;width:220px;height:220px;background:radial-gradient(circle,var(--frame-blue),var(--frame-violet) 25%,var(--frame-rose) 42%,transparent 65%);transform:translate(calc(var(--pointer-x,0px) - 110px),calc(var(--pointer-y,0px) - 110px))}
 [data-pointer='active']>.card-edge-glow{display:block;opacity:1}
