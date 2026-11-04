@@ -4,6 +4,7 @@ const paths: Record<string, string> = {
   calendar: 'M7 3v4m10-4v4M4 10h16M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2M7 14h2m6 0h2m-10 3h2',
   grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   bookmark: 'M6 3h12v18l-6-4-6 4z',
+  archive: 'M3 4h18v4H3zM5 8v12h14V8m-10 4h6',
   refresh: 'M20 7v5h-5M4 17v-5h5M6.1 6a8 8 0 0 1 13.3 3M4.6 15a8 8 0 0 0 13.3 3',
   search: 'm21 21-5-5M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0',
   clock: 'M12 8v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',

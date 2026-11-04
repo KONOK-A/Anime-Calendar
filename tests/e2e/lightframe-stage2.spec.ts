@@ -46,8 +46,10 @@ test('阶段二：目录复用带内框的海报卡，三档密度均保留原�
 test('阶段二：少量追番是横向收藏卡，显示真实下次参考排期', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:2'])));
   await page.goto('/#/favorites'); await page.reload();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   const grid = page.locator('.collection-grid'), card = grid.locator('.anime-card');
   await expect(card).toHaveCount(1);
+  await expect(card.getByRole('heading', { name: '放课后的音符' })).toBeVisible();
   const size = await card.boundingBox(), container = await grid.boundingBox();
   expect(size!.width).toBeGreaterThan(container!.width * .85);
   const image = await card.locator('.poster-frame').boundingBox(), title = await card.getByRole('heading').boundingBox();
@@ -59,12 +61,13 @@ test('阶段二：少量追番是横向收藏卡，显示真实下次参考排�
 test('阶段二：多部追番使用宽屏双列和手机单列，保留无排期状态', async ({ page }, info) => {
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bgm:2', 'bgm:3', 'bgm:4'])));
   await page.goto('/#/favorites'); await page.reload();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   const grid = page.locator('.collection-grid');
   await expect(grid.locator('.anime-card')).toHaveCount(4);
   const columns = await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(columns).toBe(info.project.name === 'mobile' ? 1 : 2);
   await expect(grid.locator('[data-anime-id="bgm:4"]')).toContainText('14天内暂无排期');
-  await expect(grid.locator('.anime-card').first()).toContainText('放课后的音符');
+  await expect(grid.locator('[data-anime-id="bgm:2"] .next-airing')).toContainText('今天 20:00');
 });
 
 test('阶段二：刷新错误提示不推挤当前主视觉，仍可关闭和重试', async ({ page }) => {
@@ -82,12 +85,14 @@ test('阶段二：刷新错误提示不推挤当前主视觉，仍可关闭和�
 test('阶段二：键盘移除收藏后焦点随布局变化留在可见作品上', async ({ page }, info) => {
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bgm:2', 'bgm:3', 'bgm:4'])));
   await page.goto('/#/favorites'); await page.reload();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   const grid = page.locator('.collection-grid');
   await expect(grid.locator('.anime-card')).toHaveCount(4);
+  await expect(grid.locator('[data-anime-id="bgm:3"] a.anime-link')).toBeVisible();
   await grid.locator('[data-anime-id="bgm:4"] .save-card').focus();
   await page.keyboard.press('Enter');
   await expect(grid.locator('.anime-card')).toHaveCount(3);
-  const replacement = grid.locator('[data-anime-id="bgm:1"] .anime-link');
+  const replacement = grid.locator('[data-anime-id="bgm:3"] .anime-link');
   await expect(replacement).toBeFocused();
   await page.waitForTimeout(300);
   const bounds = await replacement.boundingBox();

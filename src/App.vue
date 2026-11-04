@@ -8,6 +8,7 @@ import WeeklyView from './views/WeeklyView.vue';
 import SeasonView from './views/SeasonView.vue';
 import FavoritesView from './views/FavoritesView.vue';
 import DetailView from './views/DetailView.vue';
+import WatchRecordDialog from './watchlist/WatchRecordDialog.vue';
 import './styles.css';
 import './collection.css';
 import './scene-visual.css';
@@ -52,6 +53,7 @@ function rememberNavigation(event: MouseEvent) {
 function changeHash() {
   savePendingScroll();
   const next = window.location.hash || '#/weekly';
+  state.watchEditor.value = null;
   const viewChanged = next.split('/')[1] !== hash.value.split('/')[1];
   if (next.startsWith('#/anime/') && isListRoute(hash.value)) state.browse.detailFrom = hash.value;
   if (next.startsWith('#/season') && isListRoute(next)) state.browse.lastSeason = next;
@@ -104,6 +106,7 @@ function fetchedLabel(value: string | null | undefined) { return value ? new Int
   <div class="app-shell" @click.capture="rememberNavigation">
     <AmbientBackdrop />
     <SiteHeader :page="page" />
+    <WatchRecordDialog v-if="state.watchEditor.value" :key="state.watchEditor.value.id" v-bind="state.watchEditor.value" @close="state.watchEditor.value = null" />
     <div class="workspace">
       <main id="content" class="main-content" tabindex="-1">
         <Transition name="feedback" :duration="{ enter: 180, leave: 120 }" @before-leave="retireFeedback" @before-enter="showEnteringPage"><div v-if="state.notice.value" class="notice" :class="state.notice.value.kind" :role="state.notice.value.kind === 'error' ? 'alert' : 'status'"><Icon name="info" :size="19" /><span>{{ state.notice.value.text }}</span><button aria-label="关闭提示" @click="closeNotice"><Icon name="close" :size="16" /></button></div></Transition>

@@ -64,16 +64,18 @@ test('V2：详情直达使用番表返回入口', async ({ page, context }) => {
 test('V2：追番卡显示下一次参考排期并区分未知排期', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bgm:2', 'bgm:4'])));
   await page.goto('/#/favorites'); await page.reload();
-  const cards = page.locator('.collection-grid .anime-card');
-  await expect(cards.first()).toContainText('放课后的音符');
-  await expect(cards.first()).toContainText('今天 20:00');
-  await expect(cards.first()).not.toContainText('预计');
-  await expect(cards.nth(1)).toContainText('11月2日');
-  await expect(cards.nth(1)).toContainText('23:30');
-  await expect(cards.nth(2)).toContainText('14天内暂无排期');
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
+  const grid = page.locator('.watch-library .collection-grid');
+  const today = grid.locator('[data-anime-id="bgm:2"] .next-airing');
+  const nextWeek = grid.locator('[data-anime-id="bgm:1"] .next-airing');
+  await expect(today).toContainText('今天 20:00');
+  await expect(today).not.toContainText('预计');
+  await expect(nextWeek).toContainText('11月2日');
+  await expect(nextWeek).toContainText('23:30');
+  await expect(grid.locator('[data-anime-id="bgm:4"] .next-airing')).toContainText('14天内暂无排期');
   await page.getByRole('combobox', { name: '显示时区' }).selectOption('Asia/Tokyo');
-  await expect(cards.nth(1)).toContainText('11月3日');
-  await expect(cards.nth(1)).toContainText('00:30');
+  await expect(nextWeek).toContainText('11月3日');
+  await expect(nextWeek).toContainText('00:30');
 });
 
 test('V2：季度翻页定位列表并在返回后保留页码', async ({ page }) => {
@@ -215,7 +217,7 @@ test('V2：主视觉离开视口或减少动效时暂停环境动画', async ({ 
   await expect(scene).toHaveAttribute('data-motion', 'paused');
 });
 
-test('V2：追番目录仍在读取时先显示加载状态', async ({ page }) => {
+test('V2：近期排期仍在读取时先显示加载状态', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '本周番表', exact: false })).toBeVisible();
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
@@ -223,7 +225,8 @@ test('V2：追番目录仍在读取时先显示加载状态', async ({ page }) =
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1'])));
   await page.goto('/#/favorites'); await page.reload();
   try {
-    await expect(page.locator('.collection-loading')).toBeVisible();
+    const plan = page.getByRole('region', { name: '近期排期', exact: true });
+    await expect(plan.getByRole('status')).toHaveText('正在读取排期…');
     await expect(page.getByRole('heading', { name: '暂时无法关联的收藏' })).toHaveCount(0);
   } finally { release(); }
   await expect(page.getByRole('link', { name: '查看星旅详情' })).toBeVisible();

@@ -43,7 +43,8 @@ test('访问优化：详情直达基础信息不等待简介和CV，未查询收
   await expect(page.getByRole('button', { name: '加入追番', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '加入追番', exact: true }).click();
   await page.getByRole('link', { name: '我的追番', exact: true }).click();
-  await expect(page.locator('.collection-grid .anime-card')).toHaveCount(1);
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
+  await expect(page.locator('.watch-library .anime-card')).toHaveCount(1);
   await expect(page.getByRole('heading', { name: '暂时无法关联的收藏' })).toHaveCount(0);
 });
 
@@ -108,25 +109,48 @@ test('访问优化：大收藏分批并发不超过两路，查询完成前不�
     const ids = ['bgm:1', ...Array.from({ length: 25 }, (_, index) => `bgm:${1000 + index}`), ...Array.from({ length: 30 }, (_, index) => `bd:missing-${index}`)];
     localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(ids));
   });
-  let release!: () => void, active = 0, peak = 0, calls = 0;
+  let release!: () => void, active = 0, peak = 0;
+  const batchSizes: number[] = [];
   const pending = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/api/catalog/items?*', async route => {
-    active++; calls++; peak = Math.max(peak, active);
-    try { await pending; await route.continue().catch(() => {}); } finally { active--; }
+    active++; peak = Math.max(peak, active);
+    batchSizes.push(new URL(route.request().url()).searchParams.get('ids')!.split(',').length);
+    let response: Awaited<ReturnType<typeof route.fetch>>;
+    try { await pending; response = await route.fetch(); } finally { active--; }
+    await route.fulfill({ response });
   });
   await page.goto('/#/favorites');
-  await expect.poll(() => calls).toBe(2);
-  await expect(page.getByRole('heading', { name: '暂时无法关联的收藏' })).toHaveCount(0);
-  release();
-  await expect(page.locator('.collection-grid .anime-card')).toHaveCount(26);
-  await expect(page.locator('.orphan-list code')).toHaveCount(30);
-  expect(peak).toBe(2);
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
+  try {
+    await expect.poll(() => batchSizes.length).toBeGreaterThan(0);
+    await expect(page.getByRole('heading', { name: '暂时无法关联的收藏' })).toHaveCount(0);
+  } finally { release(); }
+  await expect(page.getByText('30 部作品暂未收录，个人记录已保留。', { exact: true })).toBeVisible();
+  await expect(page.getByText('正在补齐作品资料，搜索结果会陆续更新。')).toHaveCount(0);
+  const cards = page.locator('.watch-library .collection-grid .anime-card');
+  const links = page.locator('.watch-library .collection-grid a.anime-link');
+  const pager = page.getByRole('navigation', { name: '追番分页', exact: true });
+  const next = pager.getByRole('button', { name: '下一页', exact: true });
+  const pageSizes = [12, 12, 12, 12, 8];
+  let found = 0;
+  for (const [index, size] of pageSizes.entries()) {
+    await expect(pager).toContainText(`${index + 1} / ${pageSizes.length}`);
+    await expect(cards).toHaveCount(size);
+    found += await links.count();
+    if (index + 1 < pageSizes.length) await next.click();
+  }
+  await expect(next).toBeDisabled();
+  expect(found).toBe(26);
+  expect(batchSizes.length).toBeGreaterThan(1);
+  expect(Math.max(...batchSizes)).toBeLessThanOrEqual(50);
+  expect(peak).toBeLessThanOrEqual(2);
 });
 
 test('访问优化：请求失败的收藏显示读取失败，保留ID而不判定失联', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1', 'bd:orphan'])));
   await page.route('**/api/catalog/items?*', route => route.abort('failed'));
   await page.goto('/#/favorites');
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   await expect(page.getByRole('heading', { name: '暂时无法读取的收藏' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '暂时无法关联的收藏' })).toHaveCount(0);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('anime-calendar:favorites:v1')!))).toEqual(['bgm:1', 'bd:orphan']);

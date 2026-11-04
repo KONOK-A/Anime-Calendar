@@ -71,6 +71,7 @@ test('季度卡片可切换4、5、6列并记忆，不改变分页或追番页�
   await page.getByRole('button', { name: '每行显示6部', exact: true }).click();
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', JSON.stringify(['bgm:1'])));
   await page.goto('/#/favorites'); await page.reload();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   await expect(page.locator('.collection-grid .anime-card')).toHaveCount(1);
   expect(await page.locator('.collection-grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1);
   const collectionWidth = (await page.locator('.collection-grid').boundingBox())!.width;

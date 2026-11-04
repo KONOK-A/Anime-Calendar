@@ -46,9 +46,12 @@ test('海报及追番卡的边缘留白可进入详情，保持完整标题提�
   await expect(page).toHaveURL(/#\/anime\/bgm:1$/);
   await page.evaluate(() => localStorage.setItem('anime-calendar:favorites:v1', '["bgm:1"]'));
   await page.goto('/#/favorites'); await page.reload();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   const favorite = page.locator('.collection-grid [data-anime-id="bgm:1"]');
-  await expect(favorite).toBeVisible(); await favorite.scrollIntoViewIfNeeded();
-  point = await blankPoint(favorite); await page.mouse.click(point.x, point.y);
+  await expect(favorite.getByRole('link', { name: '查看星旅详情' })).toHaveAttribute('title', '星旅 / 星の旅');
+  await favorite.scrollIntoViewIfNeeded();
+  const bounds = (await favorite.boundingBox())!;
+  await page.mouse.click(bounds.x + 6, bounds.y + 6);
   await expect(page).toHaveURL(/#\/anime\/bgm:1$/);
 });
 

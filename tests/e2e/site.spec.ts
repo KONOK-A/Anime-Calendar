@@ -49,13 +49,18 @@ test('备份导入合并去重，无效备份不损坏收藏，允许移除失�
   await page.getByRole('link', { name: '我的追番', exact: true }).click();
   const backup = { version: 1, exportedAt: '2026-10-29T00:00:00Z', favorites: ['bgm:1', 'bgm:1', 'bd:orphan'] };
   await page.getByLabel('导入追番备份').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  const confirm = page.getByRole('dialog', { name: '预览备份' });
+  await expect(confirm).toContainText('新增收藏');
+  await confirm.getByRole('button', { name: '合并导入', exact: true }).click();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   await expect(page.getByRole('link', { name: '查看星旅详情' })).toHaveCount(1);
-  await expect(page.getByText('bd:orphan')).toBeVisible();
+  await expect(page.locator('.watch-entry[data-anime-id="bd:orphan"]')).toBeVisible();
   await page.getByLabel('导入追番备份').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
-  await expect(page.getByRole('alert')).toContainText('现有收藏未改动');
+  await expect(page.getByRole('alert')).toContainText('现有记录未改动');
   await expect(page.getByRole('link', { name: '查看星旅详情' })).toHaveCount(1);
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: '导出备份' }).click(); expect((await download).suggestedFilename()).toMatch(/anime-calendar/);
-  await page.getByRole('button', { name: '移除bd:orphan' }).click(); await expect(page.getByText('bd:orphan')).toHaveCount(0);
+  await page.getByRole('button', { name: '移除bd:orphan' }).click();
+  await expect(page.locator('.watch-entry[data-anime-id="bd:orphan"]')).toHaveCount(0);
 });
 
 test('多个标签页的收藏添加、移除和导入不会互相覆盖', async ({ page, context }) => {
@@ -68,12 +73,14 @@ test('多个标签页的收藏添加、移除和导入不会互相覆盖', async
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('anime-calendar:favorites:v1') ?? '[]'))).toEqual(['bgm:1', 'bgm:2']);
   await page.bringToFront();
   await page.getByRole('link', { name: '我的追番', exact: true }).click();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   await expect(page.getByRole('link', { name: '查看放课后的音符详情' })).toBeVisible();
   await page.getByRole('button', { name: '取消追番放课后的音符', exact: true }).click();
   await expect(second.getByRole('button', { name: '加入追番', exact: true })).toBeVisible();
   await second.bringToFront();
   await second.getByRole('link', { name: '我的追番', exact: true }).click();
   await second.getByLabel('导入追番备份').setInputFiles({ name: 'extra.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ version: 1, favorites: ['bgm:3'] })) });
+  await second.getByRole('dialog', { name: '预览备份' }).getByRole('button', { name: '合并导入', exact: true }).click();
   await expect(page.getByRole('link', { name: '查看漫长的夏日详情' })).toBeVisible(); await expect(page.getByRole('link', { name: '查看星旅详情' })).toBeVisible();
   await second.close();
 });
@@ -109,9 +116,12 @@ test('目录不可用时仍能查看收藏ID和导出备份', async ({ page }) =
     return route.fulfill({ status: 503, json: { ...view, catalog: null, error: '目录暂不可用' } });
   });
   await page.goto('/#/favorites'); await page.reload();
-  await expect(page.getByText('bd:orphan', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
+  const orphan = page.locator('.watch-entry[data-anime-id="bd:orphan"]');
+  await expect(orphan).toBeVisible();
+  await expect(page.getByRole('heading', { name: '暂时无法读取的收藏', exact: true })).toBeVisible();
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: '导出备份', exact: true }).click(); expect((await download).suggestedFilename()).toMatch(/anime-calendar/);
-  await page.getByRole('button', { name: '移除bd:orphan' }).click(); await expect(page.getByText('bd:orphan', { exact: true })).toHaveCount(0);
+  await orphan.getByRole('button', { name: '移除bd:orphan' }).click(); await expect(orphan).toHaveCount(0);
 });
 
 test('跨周后所选日期自动进入新周，不会隐藏整张窄屏番表', async ({ page }) => {

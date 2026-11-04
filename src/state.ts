@@ -1,7 +1,7 @@
-import { computed, inject, onUnmounted, reactive, ref, watch, type InjectionKey } from 'vue';
+import { computed, inject, onUnmounted, reactive, ref, shallowRef, watch, type InjectionKey } from 'vue';
 import type { Anime, AnimeCredits, AnimeDetail, AppStatus, CatalogSnapshot, CatalogView, CharacterNames, Timezone } from '../shared/types';
 import { seasonFrom } from '../shared/schedule';
-import { exportBackup, FAVORITES_KEY, parseBackup, readFavorites, saveFavorites } from './favorites';
+import { exportBackup, FAVORITES_KEY, readFavorites, saveFavorites } from './favorites';
 import { useTheme } from './theme';
 import { useBrowseState } from './browse';
 import type { CatalogColumns, WeeklyLayout } from './presentation';
@@ -10,6 +10,9 @@ import { isAnimeDetail, isCatalogView, isCurrentCatalogView } from './data-valid
 import { catalogRequests, type CatalogRequest } from './catalog-requests';
 import { createSeasonRatings, ratingItemIdentity, ratingMatchesItem } from './season-ratings';
 import { summarizeRatings, validRatingSummary, type RatingSummary } from '../shared/scores';
+import { createWatchCatalog, watchReferenceEvents, watchWeekRequests } from './watchlist/catalog';
+import { useWatchLibrary } from './watchlist/library';
+import { watchTitle } from './watchlist/model';
 
 type AnimeRatings = RatingSummary & { id: string };
 function isAnimeRatings(value: unknown): value is AnimeRatings {
@@ -63,8 +66,8 @@ export function createAppState() {
     if (latest.error) notify(latest.error, 'error'); else favorites.value = latest.ids;
   }
   window.addEventListener('storage', syncFavorites); onUnmounted(() => window.removeEventListener('storage', syncFavorites));
-  async function favoritesLock(work: () => void) {
-    if (navigator.locks) await navigator.locks.request('anime-calendar:favorites', work); else work();
+  async function favoritesLock(work: () => void | Promise<void>) {
+    if (navigator.locks) await navigator.locks.request('anime-calendar:favorites', work); else await work();
   }
   try { const saved = storage.getItem('anime-calendar:timezone'); if (saved === 'Asia/Tokyo') timezone.value = saved; } catch { /* 北京时间仍可使用，收藏操作另行报告存储失败。 */ }
   try { if (storage.getItem('anime-calendar:weekly-layout') === 'rows') weeklyLayout.value = 'rows'; } catch { /* 可选显示偏好读取失败时使用竖列。 */ }
@@ -80,6 +83,96 @@ export function createAppState() {
   }
 
   function notify(text: string, kind: 'info' | 'error' = 'info') { notice.value = { text, kind }; }
+  const library = useWatchLibrary({ favorites, storage, lock: favoritesLock, notify });
+  const referenceViews = shallowRef<CatalogView[]>([]), watchReferenceLoading = ref(false), watchReferenceError = ref<string | null>(null);
+  const watchReference = computed(() => watchReferenceEvents(referenceViews.value, now.value, timezone.value));
+  const watchNextEvents = computed(() => watchReferenceEvents(referenceViews.value, now.value, timezone.value, 14));
+  let referenceController: AbortController | undefined;
+  let referenceSignature = '';
+  const onWatchlist = () => currentRoute.replace(/^#/, '') === '/favorites';
+
+  function updateWatchStatus(view: CatalogView, cached = false) {
+    if (!onWatchlist()) return;
+    if (!cached || !status.value) status.value = { ...view.status, refreshing: cached ? false : view.status.refreshing || status.value?.refreshing === true };
+    seasons.value = view.seasons;
+    if (status.value?.refreshing && !pollTimer) pollTimer = setTimeout(poll, 1500);
+  }
+
+  const watchCatalog = createWatchCatalog({
+    load: async (request, signal, force) => {
+      const result = await fetchView(request, undefined, force, signal);
+      return result.data;
+    },
+    onTitles: library.rememberWatchTitles,
+    onStatus: view => {
+      for (const item of view.catalog?.items ?? []) knownItems.set(item.id, item);
+      updateWatchStatus(view);
+    },
+  });
+  const watchIds = computed(() => [...new Set([...favorites.value, ...library.watchlist.value.records.map(row => row.id), ...library.watchlist.value.memberships.map(row => row.animeId)])]);
+  watch(library.watchlist, snapshot => watchCatalog.seed(snapshot.titles));
+  watch(watchIds, (ids, previous) => {
+    if (initialized && onWatchlist() && (ids.length !== previous.length || ids.some((id, index) => id !== previous[index]))) watchCatalog.activate(ids);
+  });
+  onUnmounted(() => { watchCatalog.dispose(); referenceController?.abort(); });
+
+  function rememberFavoriteItem(id: string) {
+    const detail = details.get(id);
+    const item = detail ?? knownItems.get(id) ?? watchCatalog.items.get(id);
+    if (item) library.rememberWatchTitles([watchTitle(item, detail?.episodes)]);
+  }
+
+  async function loadWatchReference(force = false) {
+    const requests = favorites.value.length ? watchWeekRequests(now.value, timezone.value, 14) : [];
+    const key = requests.map(request => request.scope.key).join('|');
+    if (!force && key === referenceSignature && (referenceController || referenceViews.value.length || !requests.length)) return;
+    referenceSignature = key;
+    referenceController?.abort();
+    if (!requests.length) { referenceViews.value = []; watchReferenceLoading.value = false; watchReferenceError.value = null; return; }
+    const controller = new AbortController();
+    referenceController = controller;
+    const current = () => !disposed && onWatchlist() && referenceController === controller && !controller.signal.aborted;
+    const valid = new Map(referenceViews.value.filter(view => requests.some(request => request.scope.key === view.scope.key)).map(view => [view.scope.key, view]));
+    referenceViews.value = [...valid.values()];
+    watchReferenceLoading.value = true;
+    watchReferenceError.value = null;
+    let failures = 0;
+    try {
+      for (const request of requests) {
+        if (!current()) return;
+        const previous = await cache.read<CatalogView>('views', request.scope.key, isCurrentCatalogView);
+        if (!current()) return;
+        if (previous?.data.catalog && !valid.has(request.scope.key)) {
+          valid.set(request.scope.key, previous.data);
+          referenceViews.value = [...valid.values()];
+          updateWatchStatus(previous.data, true);
+        }
+        try {
+          const result = await fetchView(request, previous, force, controller.signal);
+          if (!current()) return;
+          valid.set(request.scope.key, result.data);
+          referenceViews.value = [...valid.values()];
+          void cache.write('views', result.data.scope.key, result.data, result.etag);
+          updateWatchStatus(result.data);
+          const ids = new Set(favorites.value);
+          const items = (result.data.catalog?.items ?? []).filter(item => ids.has(item.id));
+          watchCatalog.seedItems(items);
+          for (const item of items) knownItems.set(item.id, item);
+          library.rememberWatchTitles(items.map(item => watchTitle(item, details.get(item.id)?.episodes)));
+        } catch { failures++; }
+      }
+      if (current() && failures) watchReferenceError.value = '部分参考放送暂时无法读取。';
+    } finally {
+      if (referenceController === controller) { referenceController = undefined; watchReferenceLoading.value = false; }
+    }
+  }
+
+  function retryWatchCatalog() {
+    const retry = [...watchCatalog.failed];
+    if (retry.length) watchCatalog.refresh(retry);
+    if (watchReferenceError.value) void loadWatchReference(true);
+  }
+
   function applyViews(views: CatalogView[], cached: boolean, extraItems: Anime[] = []) {
     const last = views.at(-1); if (!last?.catalog) return;
     const byId = new Map(extraItems.map(item => [item.id, item]));
@@ -101,19 +194,20 @@ export function createAppState() {
     for (const id of missingIds.value) knownItems.delete(id);
     for (const id of changedRatings) { ratingSummaries.delete(id); ratingIdentities.delete(id); void loadRatings(id, true); }
   }
-  function fetchView(request: CatalogRequest, previous: CachedData<CatalogView> | undefined, force: boolean) {
+  function fetchView(request: CatalogRequest, previous: CachedData<CatalogView> | undefined, force: boolean, signal?: AbortSignal) {
     const key = `${request.scope.key}|${force ? 'force' : previous?.etag ?? ''}`;
-    const pending = viewRequests.get(key); if (pending) return pending;
+    const pending = signal ? undefined : viewRequests.get(key); if (pending) return pending;
     const task = (async () => {
       const controller = new AbortController(); controllers.add(controller);
+      const requestSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
       const timeout = setTimeout(() => controller.abort(), 15_000);
       try {
         let response: Response;
-        try { response = await fetch(request.url, { headers: !force && previous?.etag ? { 'if-none-match': previous.etag } : {}, signal: controller.signal }); }
+        try { response = await fetch(request.url, { headers: !force && previous?.etag ? { 'if-none-match': previous.etag } : {}, signal: requestSignal }); }
         catch { throw new Error(controller.signal.aborted ? '读取页面超时，请稍后重试。' : '无法连接服务，请稍后重试。'); }
         if (response.status === 304) {
           if (previous?.data.catalog) return { data: previous.data, etag: previous.etag };
-          response = await fetch(request.url, { cache: 'reload', signal: controller.signal });
+          response = await fetch(request.url, { cache: 'reload', signal: requestSignal });
         }
         const value: unknown = await response.json();
         if (!response.ok) {
@@ -126,11 +220,38 @@ export function createAppState() {
         if (scope.type !== wanted.type || scope.key !== wanted.key) throw new Error('页面资料范围不匹配，请重试。');
         return { data: value, etag: response.headers.get('etag') };
       } finally { clearTimeout(timeout); controllers.delete(controller); }
-    })().finally(() => { viewRequests.delete(key); });
-    viewRequests.set(key, task); return task;
+    })().finally(() => { if (!signal) viewRequests.delete(key); });
+    if (!signal) viewRequests.set(key, task);
+    return task;
   }
   async function loadPage(route = currentRoute, force = false) {
+    const previousRoute = currentRoute;
     currentRoute = route; initialized = true;
+    if (onWatchlist()) {
+      const version = ++viewVersion;
+      if (signature !== 'watchlist') {
+        signature = 'watchlist';
+        for (const controller of confirmations) controller.abort('route-changed');
+        confirmations.clear();
+      }
+      loading.value = false;
+      viewError.value = null;
+      await library.ensureWatchLibrary();
+      if (disposed || version !== viewVersion) return;
+      watchCatalog.seed(library.watchlist.value.titles);
+      watchCatalog.seedItems(watchIds.value.flatMap(id => knownItems.has(id) ? [knownItems.get(id)!] : []));
+      watchCatalog.activate(watchIds.value);
+      if (force) watchCatalog.refresh();
+      void loadWatchReference(force);
+      if (!status.value && !favorites.value.length) void json<AppStatus>('/api/status').then(value => { if (!disposed && onWatchlist() && !status.value) status.value = value; }).catch(() => {});
+      return;
+    }
+    if (previousRoute.replace(/^#/, '') === '/favorites') {
+      watchCatalog.deactivate();
+      referenceController?.abort();
+      referenceController = undefined;
+      referenceSignature = '';
+    }
     const requests = catalogRequests(route, now.value, timezone.value, favorites.value), nextSignature = requests.map(request => request.scope.key).join('|');
     const version = ++viewVersion, current = () => !disposed && version === viewVersion;
     const same = signature === nextSignature; signature = nextSignature;
@@ -139,16 +260,15 @@ export function createAppState() {
     if (route.replace(/^#/, '').startsWith('/anime/') && lookupIds[0]) void loadDetail(lookupIds[0]);
     const seeded = lookupIds.length > 0 && lookupIds.every(id => knownItems.has(id));
     const seedItems = seeded ? lookupIds.map(id => knownItems.get(id)!) : [];
-    const retainCollection = route.replace(/^#/, '') === '/favorites' && catalog.value !== null;
-    if (!same && !retainCollection && !seeded) catalog.value = null;
+    if (!same && !seeded) catalog.value = null;
     if (seeded && catalog.value) catalog.value = { ...catalog.value, items: seedItems };
     loading.value = !catalog.value; viewError.value = null; unresolvedIds.value = []; missingIds.value = [];
     if (!requests.length) { loading.value = false; return; }
     const cached = await Promise.all(requests.map(request => cache.read<CatalogView>('views', request.scope.key, isCurrentCatalogView)));
     if (!current()) return;
     const available = cached.flatMap(entry => entry?.data.catalog ? [entry.data] : []);
-    if (available.length) applyViews(available, true, retainCollection ? (catalog.value?.items ?? []).filter(item => favorites.value.includes(item.id)) : seedItems);
-    const ready = same && !!catalog.value || seeded || available.length === requests.length || retainCollection;
+    if (available.length) applyViews(available, true, seedItems);
+    const ready = same && !!catalog.value || seeded || available.length === requests.length;
     if (ready) loading.value = false;
     const update = async () => {
       const results = cached.map(entry => entry?.data.catalog ? entry.data : undefined);
@@ -197,14 +317,18 @@ export function createAppState() {
     const path = currentRoute.replace(/^#/, '');
     if (path === '/weekly' || path === '/' || path === '/season' && next[1] !== previous[1]) void loadPage(currentRoute);
   });
-  watch(favorites, () => { if (initialized && currentRoute.replace(/^#/, '') === '/favorites') void loadPage(currentRoute); });
+  watch([timezone, () => watchWeekRequests(now.value, timezone.value, 14).map(request => request.scope.key).join('|')], () => { if (initialized && onWatchlist()) void loadWatchReference(); });
+  watch(favorites, (ids, previous) => {
+    if (!initialized || !onWatchlist()) return;
+    if (!ids.length || !previous.length) void loadWatchReference();
+  });
   async function refresh() {
     try {
       status.value = await json<AppStatus>('/api/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
       if (status.value.refreshing) void poll(); else await loadPage(currentRoute, true);
     } catch (error) { notify((error as Error).message, 'error'); }
   }
-  function relevant(id: string) { return !!catalog.value?.items.some(item => item.id === id); }
+  function relevant(id: string) { return onWatchlist() ? favorites.value.includes(id) : !!catalog.value?.items.some(item => item.id === id); }
   function ratingItem(id: string) { return knownItems.get(id) ?? details.get(id); }
   function loadRatings(id: string, force = false): Promise<void> {
     const item = ratingItem(id), identity = ratingItemIdentity(item), pending = pendingRatings.get(id);
@@ -291,7 +415,11 @@ export function createAppState() {
           if (!latest.detailError && latest.revalidating !== true) void cache.write('details', id, latest, null);
         }
       } finally { confirmations.delete(controller); controllers.delete(controller); }
-    })().catch(error => { if (!disposed && activeController?.signal.reason !== 'route-changed') { if (error.statusCode === 404) missingDetails.add(id); detailErrors.set(id, `详情请求失败：${(error as Error).message}`); } }).finally(() => { pending.delete(id); detailLoading.delete(id); if (!disposed && !missingDetails.has(id) && relevant(id)) void loadRatings(id); });
+    })().catch(error => { if (!disposed && activeController?.signal.reason !== 'route-changed') { if (error.statusCode === 404) missingDetails.add(id); detailErrors.set(id, `详情请求失败：${(error as Error).message}`); } }).finally(() => {
+      pending.delete(id); detailLoading.delete(id);
+      if (!disposed && favorites.value.includes(id) && details.has(id)) rememberFavoriteItem(id);
+      if (!disposed && !missingDetails.has(id) && relevant(id)) void loadRatings(id);
+    });
     pending.set(id, task); return task;
   }
   function loadCredits(id: string, force = false): Promise<void> {
@@ -351,6 +479,7 @@ export function createAppState() {
       const result = saveFavorites(storage, next);
       if (!result.saved) { notify(result.error!, 'error'); return; }
       favorites.value = next;
+      if (adding) rememberFavoriteItem(id);
     });
   }
   function setTimezone(zone: Timezone) {
@@ -358,22 +487,11 @@ export function createAppState() {
     browse.weekly.selectedDay = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now.value));
     try { storage.setItem('anime-calendar:timezone', zone); } catch { notify('本次已切换时区，但浏览器未能保存显示偏好。'); }
   }
-  async function importFavorites(file: File) {
-    try {
-      if (file.size > 2_000_000) throw new Error('备份文件过大，现有收藏未改动。');
-      const content = await file.text(); parseBackup(content, []);
-      await favoritesLock(() => {
-        const latest = readFavorites(storage), next = parseBackup(content, latest.error ? favorites.value : latest.ids), saved = saveFavorites(storage, next);
-        if (!saved.saved) throw new Error(saved.error);
-        favorites.value = next; notify(`备份已合并，当前共 ${next.length} 部追番。`);
-      });
-    } catch (error) { notify((error as Error).message, 'error'); }
-  }
   function downloadFavorites() {
     const blob = new Blob([exportBackup(favorites.value, new Date().toISOString())], { type: 'application/json' });
     const url = URL.createObjectURL(blob), anchor = document.createElement('a'); anchor.href = url; anchor.download = `anime-calendar-${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  return { catalog, status, seasons, seasonRatings, ratingSummaries, ratingsLoading, ratingErrors, loadRatings, loading, missingIds, unresolvedIds, viewError, loadPage, retryView, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, importFavorites, downloadFavorites };
+  return { catalog, status, seasons, seasonRatings, ratingSummaries, ratingsLoading, ratingErrors, loadRatings, loading, missingIds, unresolvedIds, viewError, loadPage, retryView, notice, favorites, timezone, weeklyLayout, setWeeklyLayout, catalogColumns, setCatalogColumns, details, detailLoading, detailErrors, credits, creditsLoading, creditsErrors, characterNamesLoading, characterNameErrors, now, currentSeason, appearance, browse, notify, initialize, refresh, loadDetail, loadCredits, loadCharacterNames, toggleFavorite, setTimezone, downloadFavorites, ...library, watchCatalog, watchReference, watchNextEvents, watchReferenceLoading, watchReferenceError, retryWatchCatalog };
 }
 export type AppState = ReturnType<typeof createAppState>;
 export const appKey: InjectionKey<AppState> = Symbol('anime-calendar');

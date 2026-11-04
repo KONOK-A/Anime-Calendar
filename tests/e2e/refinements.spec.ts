@@ -98,6 +98,7 @@ test('季度、追番和番表卡片显示有效评分，无投票作品不显�
   await expect(unrated.locator('.card-rating')).toHaveCount(0);
   await rated.getByRole('button', { name: '追番星旅', exact: true }).click();
   await page.getByRole('link', { name: /我的追番/ }).click();
+  await page.getByRole('button', { name: '全部作品', exact: true }).click();
   await expect(page.locator('.collection-grid').getByLabel('综合评分 7.8 / 10', { exact: true })).toBeVisible();
   await page.getByRole('link', { name: '本周番表', exact: true }).click();
   if (info.project.name === 'mobile') await page.getByRole('button', { name: '星期一', exact: false }).click();
