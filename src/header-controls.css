@@ -46,6 +46,7 @@
 }
 @media(pointer:coarse) and (min-width:901px) and (max-width:1199px){
   .site-header.lightframe-header .header-inner{gap:8px}
+  .site-header.lightframe-header .main-nav .nav-count{position:absolute;top:8px;inset-inline-end:4px}
 }
 @media(pointer:coarse) and (max-width:767px){
   .site-header.lightframe-header .toolbar-controls{gap:2px}

@@ -16,6 +16,7 @@ test('触控记录一集后，反馈结束会恢复按钮的普通样式', async
 });
 
 test('触控横屏时，顶栏、底栏和结果区避开左右安全区', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('anime-calendar:favorites:v1', '["bgm:1"]'));
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto('/#/season/2026/4');
   await page.evaluate(() => {
@@ -24,6 +25,7 @@ test('触控横屏时，顶栏、底栏和结果区避开左右安全区', async
   });
   const brand = page.getByRole('link', { name: '番时记首页' });
   const nav = page.getByRole('navigation', { name: '主导航', exact: true });
+  await expect(nav.locator('.nav-count')).toHaveText('1');
   const refresh = page.getByRole('button', { name: '刷新数据', exact: true });
   const search = page.getByRole('searchbox', { name: '搜索作品' });
   for (const [width, height] of [[844, 390], [901, 430], [932, 430]] as const) {
