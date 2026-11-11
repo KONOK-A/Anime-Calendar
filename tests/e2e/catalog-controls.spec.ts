@@ -5,6 +5,46 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/#/season/2026/4');
 });
 
+test('季度筛选无结果时可用键盘清除并继续搜索', async ({ page }) => {
+  const search = page.getByRole('searchbox', { name: '搜索作品' });
+  const type = page.getByRole('combobox', { name: '作品类型' });
+  await type.selectOption('web');
+  await search.fill('星旅别名');
+  await expect(page.getByRole('heading', { name: '没有匹配的作品' })).toBeVisible();
+  await page.getByRole('button', { name: '清除筛选' }).press('Enter');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('');
+  await expect(type).toHaveValue('');
+  await page.keyboard.insertText('星旅别名');
+  await expect(page.locator('.catalog-result-meta [aria-live="polite"]')).toContainText('找到 1 部作品');
+  await expect(page.getByRole('link', { name: '查看星旅详情' })).toBeVisible();
+});
+
+test('季度目录可从顶部翻页，末页保留可用的键盘焦点', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/#/season/2025/4');
+  const top = page.getByRole('navigation', { name: '顶部作品分页', exact: true });
+  const bottom = page.getByRole('navigation', { name: '作品分页', exact: true });
+  const next = top.getByRole('button', { name: '下一页' });
+  const previous = top.getByRole('button', { name: '上一页' });
+  const cards = page.locator('.catalog-page .anime-card');
+  await expect(cards).toHaveCount(24);
+  await expect(top).toBeInViewport();
+  await expect(previous).toBeDisabled();
+  await next.press('Enter');
+  await expect(cards).toHaveCount(1);
+  await expect(cards.first()).toHaveAttribute('data-anime-id', 'bgm:1024');
+  await expect(top.getByRole('status', { name: '页码' })).toHaveText('2 / 2');
+  await expect(bottom).toContainText('2 / 2');
+  await expect(previous).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(cards).toHaveCount(24);
+  await expect(next).toBeFocused();
+  await page.getByRole('searchbox', { name: '搜索作品' }).fill('历史分页样本25别名');
+  await expect(cards).toHaveCount(1);
+  await expect(top).toHaveCount(0);
+});
+
 test('目录筛选面板可以直接点选年份、季度和作品类型', async ({ page }) => {
   const year = page.getByRole('combobox', { name: '年份', exact: true });
   await year.click();
@@ -61,7 +101,7 @@ test('季度卡片可切换4、5、6列并记忆，不改变分页或追番页�
   await expect(six).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(async () => (await grid.locator('.anime-card').first().boundingBox())!.width).toBeLessThan(originalWidth);
   await expect(grid.locator('.anime-card')).toHaveCount(24);
-  await page.getByRole('button', { name: '下一页' }).click();
+  await page.getByRole('navigation', { name: '作品分页', exact: true }).getByRole('button', { name: '下一页' }).click();
   await page.reload();
   await expect(grid.locator('.anime-card')).toHaveCount(1);
   await expect.poll(columns).toBe(6);

@@ -1,6 +1,11 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Ref, type WatchSource } from 'vue';
 import { useAppState } from './state';
 
+export function markDisclosureInput(event: MouseEvent) {
+  const details = (event.currentTarget as HTMLElement).parentElement;
+  if (details instanceof HTMLDetailsElement) details.toggleAttribute('data-pointer-open', event.detail > 0 && !details.open);
+}
+
 export function useMotionScope(element: Ref<HTMLElement | undefined>) {
   const state = useAppState(), inView = ref(false), visible = ref(!document.hidden);
   const active = computed(() => inView.value && visible.value && !state.appearance.reducedMotion.value);

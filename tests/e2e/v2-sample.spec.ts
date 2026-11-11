@@ -81,7 +81,7 @@ test('V2：追番卡显示下一次参考排期并区分未知排期', async ({ 
 test('V2：季度翻页定位列表并在返回后保留页码', async ({ page }) => {
   await page.goto('/#/season/2025/4');
   await expect(page.locator('.poster-grid .anime-card')).toHaveCount(24);
-  await page.getByRole('button', { name: '下一页', exact: true }).click();
+  await page.getByRole('navigation', { name: '作品分页', exact: true }).getByRole('button', { name: '下一页', exact: true }).click();
   await expect(page.locator('.poster-grid .anime-card')).toHaveCount(1);
   await expect.poll(() => page.locator('#season-results').evaluate(el => Math.round(el.getBoundingClientRect().top))).toBeLessThan(140);
   await expect(page.locator('#season-results')).toBeFocused();

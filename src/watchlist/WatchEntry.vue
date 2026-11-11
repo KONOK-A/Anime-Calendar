@@ -35,6 +35,8 @@ const visible = ref(false);
 const busy = ref(false);
 const recordedCount = ref<number | null>(null);
 let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
+let pointerMenuOpen = false;
+let menuMotion: Animation | undefined;
 let disposed = false;
 const name = computed(() => props.title?.title || props.id);
 const longTitle = computed(() => props.title?.originalTitle && props.title.originalTitle !== name.value ? `${name.value} / ${props.title.originalTitle}` : name.value);
@@ -64,11 +66,13 @@ onUnmounted(() => {
   disposed = true;
   clearTimeout(feedbackTimer);
   observer?.disconnect();
+  stopMenuMotion();
   detachMenuListeners();
 });
 watch(() => visible.value && !!props.title && props.availability === undefined, shouldLoad => {
   if (shouldLoad && !props.reference) void state.loadDetail(props.id);
 });
+watch(() => state.appearance.reducedMotion.value, stopMenuMotion);
 
 async function run(action: () => Promise<unknown>) {
   if (busy.value) return;
@@ -91,6 +95,8 @@ async function increment() {
 
 function closeMenu(restoreFocus = false) {
   if (!menu.value?.open) return;
+  pointerMenuOpen = false;
+  stopMenuMotion();
   menu.value.open = false;
   if (restoreFocus) menu.value.querySelector('summary')?.focus();
 }
@@ -100,6 +106,16 @@ function menuFocusOut(event: FocusEvent) {
 
 function menuPointerDown(event: PointerEvent) {
   if (event.target instanceof Node && !menu.value?.contains(event.target)) closeMenu();
+}
+
+function stopMenuMotion() {
+  menuMotion?.cancel();
+  menuMotion = undefined;
+}
+
+function menuActivated(event: MouseEvent) {
+  pointerMenuOpen = event.detail > 0 && menu.value?.open === false;
+  if (!pointerMenuOpen) stopMenuMotion();
 }
 
 function placeMenu() {
@@ -115,9 +131,11 @@ function placeMenu() {
   const availableBelow = bottom - anchor.bottom - 12;
   const availableAbove = anchor.top - top - 12;
   const above = availableBelow < panel.scrollHeight && availableAbove > availableBelow;
-
-  menu.value.dataset.placement = above ? 'above' : 'below';
-  menu.value.dataset.align = anchor.right - panel.offsetWidth < 12 ? 'start' : 'end';
+  const placement = above ? 'above' : 'below';
+  const align = anchor.right - panel.offsetWidth < 12 ? 'start' : 'end';
+  if (menu.value.dataset.placement !== placement || menu.value.dataset.align !== align) stopMenuMotion();
+  menu.value.dataset.placement = placement;
+  menu.value.dataset.align = align;
   panel.style.maxHeight = `${Math.max(48, above ? availableAbove : availableBelow)}px`;
 }
 
@@ -128,8 +146,18 @@ function detachMenuListeners() {
 }
 
 function menuToggled() {
-  if (!menu.value?.open) { detachMenuListeners(); return; }
+  const animateOpen = pointerMenuOpen;
+  pointerMenuOpen = false;
+  if (!menu.value?.open) { stopMenuMotion(); detachMenuListeners(); return; }
   placeMenu();
+  if (animateOpen && menuPanel.value?.animate) {
+    stopMenuMotion();
+    const reduced = state.appearance.reducedMotion.value;
+    menuMotion = menuPanel.value.animate(reduced
+      ? [{ opacity: .85 }, { opacity: 1 }]
+      : [{ opacity: .55, transform: 'scale(.98)' }, { opacity: 1, transform: 'none' }],
+    { duration: reduced ? 100 : 150, easing: 'cubic-bezier(.22,1,.36,1)' });
+  }
   document.addEventListener('pointerdown', menuPointerDown, true);
   window.addEventListener('resize', placeMenu);
   window.addEventListener('scroll', placeMenu, { passive: true });
@@ -182,12 +210,12 @@ function menuToggled() {
         {{ recordedCount !== null ? '已记录' : '+1 集' }}
       </button>
       <span class="watch-entry-announcement" role="status">{{ recordedCount === null ? '' : `${name}，已看 ${recordedCount} 集` }}</span>
-      <button v-if="saved" type="button" :disabled="!editable" :aria-label="`编辑${name}追番记录`" @click="state.openWatchEditor(id)">编辑</button>
-      <button v-if="saved && record.plannedDate && !record.archived" type="button" :disabled="!editable" :aria-label="`调整${name}计划日期`" @click="state.openWatchEditor(id, 'date')">改期</button>
+      <button v-if="saved" type="button" :disabled="!editable" :aria-label="`编辑${name}追番记录`" @click="state.openWatchEditor(id, undefined, $event)">编辑</button>
+      <button v-if="saved && record.plannedDate && !record.archived" type="button" :disabled="!editable" :aria-label="`调整${name}计划日期`" @click="state.openWatchEditor(id, 'date', $event)">改期</button>
       <button v-if="saved && record.archived" type="button" :disabled="!editable" :aria-disabled="busy || undefined" @click="run(() => state.updateWatchRecords([id], { archived: false }))">恢复归档</button>
       <button v-if="!saved" type="button" :aria-disabled="busy || undefined" @click="run(() => state.toggleFavorite(id))">重新收藏</button>
       <details v-if="!record.archived || record.updatedAt || !saved" ref="menu" class="watch-entry-menu" @toggle="menuToggled" @keydown.esc.stop.prevent="closeMenu(true)" @focusout="menuFocusOut">
-        <summary :aria-label="`${name}的更多操作`" title="更多操作"><span aria-hidden="true">···</span></summary>
+        <summary :aria-label="`${name}的更多操作`" title="更多操作" @click="menuActivated"><span aria-hidden="true">···</span></summary>
         <div ref="menuPanel" class="watch-entry-menu-body">
           <button v-if="saved && !record.archived" type="button" :disabled="!editable" :aria-label="`将${name}加入清单`" @click="closeMenu(true); emit('assign', id)">加到清单</button>
           <button v-if="saved && inList" type="button" :disabled="!editable" @click="closeMenu(true); emit('removeFromList', id)">移出清单</button>
@@ -275,9 +303,10 @@ function menuToggled() {
 }
 .watch-increment[data-recorded] > svg { animation: watch-record-check 150ms ease-out; }
 @keyframes watch-record-check { from { opacity: .25; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
-.watch-entry-menu-body { overflow-y: auto; overscroll-behavior: contain; }
-.watch-entry-menu[data-placement='above'] .watch-entry-menu-body { top: auto; bottom: 100%; }
-.watch-entry-menu[data-align='start'] .watch-entry-menu-body { right: auto; left: 0; }
+.watch-entry-menu-body { overflow-y: auto; overscroll-behavior: contain; transform-origin: right top; }
+.watch-entry-menu[data-placement='above'] .watch-entry-menu-body { top: auto; bottom: 100%; transform-origin: right bottom; }
+.watch-entry-menu[data-align='start'] .watch-entry-menu-body { right: auto; left: 0; transform-origin: left top; }
+.watch-entry-menu[data-placement='above'][data-align='start'] .watch-entry-menu-body { transform-origin: left bottom; }
 @media (min-width: 1220px) {
   .watch-entry:not(.watch-entry-reference) > .watch-entry-main {
     grid-template-columns: 70px minmax(0, 1fr) minmax(88px, auto);

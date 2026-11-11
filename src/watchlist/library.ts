@@ -25,7 +25,7 @@ export function useWatchLibrary(options: LibraryOptions) {
   const { favorites, storage, lock, notify } = options;
   const watchlist = shallowRef(emptyWatchSnapshot());
   const watchReady = ref(false), watchStorageError = ref<string | null>(null);
-  const watchEditor = shallowRef<{ id: string; focus?: 'date' } | null>(null);
+  const watchEditor = shallowRef<{ id: string; focus?: 'date'; pointerOpened: boolean } | null>(null);
   const store = createWatchStore();
   let unsubscribe: (() => void) | undefined, reading: Promise<void> | undefined;
   let generation = 0, disposed = false;
@@ -55,8 +55,8 @@ export function useWatchLibrary(options: LibraryOptions) {
     return reading ?? (watchReady.value && !watchStorageError.value ? Promise.resolve() : readLibrary());
   }
 
-  function openWatchEditor(id: string, focus?: 'date') {
-    watchEditor.value = { id, focus };
+  function openWatchEditor(id: string, focus?: 'date', event?: MouseEvent) {
+    watchEditor.value = { id, focus, pointerOpened: !!event && event.detail > 0 };
     void ensureWatchLibrary();
   }
 

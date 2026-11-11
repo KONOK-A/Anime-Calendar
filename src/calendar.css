@@ -6,6 +6,10 @@
 .weekly-layout-switch button[aria-pressed='true']{background:var(--accent);color:var(--accent-ink);box-shadow:0 2px 5px color-mix(in srgb,var(--accent) 16%,transparent)}
 .week-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:18px;color:var(--muted);font-size:12px}
 .weekly-count{font-size:12px;color:var(--muted)}
+.week-empty{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 16px;border:1px dashed var(--line);border-radius:14px;background:color-mix(in srgb,var(--surface) 72%,transparent)}
+.week-empty-icon{display:grid;place-items:center;width:34px;height:34px;flex-shrink:0;border-radius:9px;background:var(--soft);color:var(--accent)}
+.week-empty p{flex:1 1 130px;color:var(--ink);font-size:14px;font-weight:600}
+.week-empty .button{margin-inline-start:auto}
 .schedule-help{position:relative;z-index:12;color:var(--muted);font-size:12px}
 .schedule-help summary{display:flex;align-items:center;gap:5px;list-style:none;min-height:30px;cursor:pointer}
 .schedule-help summary::-webkit-details-marker{display:none}
@@ -51,7 +55,7 @@
   .weekly-grid .day-column,.weekly-grid[data-layout='rows'] .day-column{display:none;padding:0;border:0;background:transparent}
   .weekly-grid .day-column.mobile-selected,.weekly-grid[data-layout='rows'] .day-column.mobile-selected{display:block}
   .weekly-grid .day-heading,.weekly-grid[data-layout='rows'] .day-heading{display:none}
-  .day-entries,.weekly-grid[data-layout='rows'] .day-entries{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0}
+  .day-entries{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0}
   .day-entries:before{display:none}
   .day-tabs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:14px}
   .day-tabs button{min-height:64px;padding:8px 4px;border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--muted);transition:background-color .16s,color .16s,border-color .16s}

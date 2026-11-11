@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import CompactPagination from '../components/CompactPagination.vue';
 import Icon from '../components/Icon.vue';
 import Poster from '../components/Poster.vue';
 import { useAppState } from '../state';
@@ -198,19 +199,10 @@ function show(section: typeof browse.section, listId = '', status: '' | WatchSta
   selected.value = new Set();
   void nextTick(focusResults);
 }
-function pageTo(page: number, trigger?: EventTarget | null) {
+function pageTo(page: number) {
   if (page < 1 || page > pages.value || page === browse.page) return;
   browse.page = page;
-  void nextTick(() => {
-    if (trigger instanceof HTMLButtonElement && trigger.isConnected) {
-      const control = trigger.disabled ? trigger.parentElement?.querySelector<HTMLButtonElement>('button:not(:disabled)') : trigger;
-      if (control) {
-        control.focus({ preventScroll: true });
-        return;
-      }
-    }
-    focusResults();
-  });
+  void nextTick(focusResults);
 }
 function resetFilters() {
   Object.assign(browse, { query: '', status: '', season: '' });
@@ -476,11 +468,7 @@ function openAssign(ids: string[]) { open(lists.value.length ? { kind: 'assign',
               <div v-if="pages > 1 || hasFilters || pageIds.length && batchAllowed" class="watch-result-actions">
                 <button v-if="hasFilters" type="button" class="text-button watch-reset-filters" @click="resetFilters">清除筛选</button>
                 <button v-if="pageIds.length && batchAllowed" ref="pageSelection" type="button" class="text-button watch-page-select" :aria-pressed="allPageSelected" @click="togglePage">{{ allPageSelected ? '取消本页选择' : '选择本页' }}</button>
-                <nav v-if="pages > 1" class="watch-pagination-quick" aria-label="顶部追番分页">
-                  <button type="button" aria-label="上一页" title="上一页" :disabled="browse.page <= 1" @click="pageTo(browse.page - 1, $event.currentTarget)"><Icon name="back" :size="14" /></button>
-                  <span class="watch-pagination-page" role="status" aria-label="页码"><strong>{{ browse.page }}</strong><span class="watch-pagination-separator"> / </span>{{ pages }}</span>
-                  <button type="button" aria-label="下一页" title="下一页" :disabled="browse.page >= pages" @click="pageTo(browse.page + 1, $event.currentTarget)"><Icon name="chevron" :size="14" /></button>
-                </nav>
+                <CompactPagination v-if="pages > 1" :page="browse.page" :pages="pages" label="顶部追番分页" @change="browse.page = $event" />
               </div>
             </div>
             <div v-if="selected.size" class="watch-batch" aria-label="批量管理">

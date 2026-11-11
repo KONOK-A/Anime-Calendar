@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { RatingSummary } from '../../shared/scores';
 import { ratingSourceRows } from '../rating-display';
+import { markDisclosureInput } from '../motion';
 import Icon from './Icon.vue';
 import '../ratings.css';
 
@@ -21,6 +22,15 @@ const notes = computed(() => rows.value.filter(row => row.note));
       </div>
     </div>
     <p v-if="error" class="rating-load-error" role="status" :title="error">{{ summary?.count ? '评分更新失败，已保留现有评分。' : '评分暂不可用，请重试。' }}</p>
-    <details class="rating-explanation"><summary>评分说明</summary><p>各站评分统一为 10 分制后等权平均，仅纳入有评分的来源。评分人数分别展示，不合并；缺少可靠人数时标为暂缺。</p><p>MAL 评分通过官方接口或作品公开页缓存读取，可能存在更新延迟。</p><p v-if="summary?.fetchedAt">资料更新于 {{ new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Shanghai' }).format(new Date(summary.fetchedAt)) }}（北京时间）。</p><p v-for="row in notes" :key="row.provider">{{ row.name }}：{{ row.note }}</p><p v-if="error">{{ error }}</p></details>
+    <details class="rating-explanation">
+      <summary @click="markDisclosureInput">评分说明</summary>
+      <div class="detail-disclosure-copy">
+        <p>各站评分统一为 10 分制后等权平均，仅纳入有评分的来源。评分人数分别展示，不合并；缺少可靠人数时标为暂缺。</p>
+        <p>MAL 评分通过官方接口或作品公开页缓存读取，可能存在更新延迟。</p>
+        <p v-if="summary?.fetchedAt">资料更新于 {{ new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Shanghai' }).format(new Date(summary.fetchedAt)) }}（北京时间）。</p>
+        <p v-for="row in notes" :key="row.provider">{{ row.name }}：{{ row.note }}</p>
+        <p v-if="error">{{ error }}</p>
+      </div>
+    </details>
   </section>
 </template>

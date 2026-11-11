@@ -70,5 +70,5 @@ export function createSeasonRatings(cache: DataCache, fetcher: typeof fetch = fe
     }).finally(() => { clearTimeout(limit); if (round === version) loading.value = false; settle(); });
     return readyPromise;
   }
-  return { snapshot, loading, error, progress, load, cancel, ready: () => readyPromise };
+  return { snapshot, loading, error, progress, load, cancel };
 }

@@ -213,16 +213,6 @@
 .watch-result-actions > button:hover { text-decoration: underline; }
 .watch-result-actions :is(.watch-reset-filters, .watch-page-select) { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .watch-result-actions .watch-page-select[aria-pressed='true'], .watch-result-actions > button:hover { color: var(--ink); }
-.watch-pagination-quick { position: relative; isolation: isolate; display: inline-grid; grid-template-columns: 44px auto 44px; flex: 0 0 auto; align-items: center; }
-.watch-pagination-quick::before { content: ''; position: absolute; z-index: -1; inset: 5px 0; border: 1px solid var(--watch-control-line); border-radius: 999px; background: var(--watch-control-surface); }
-.watch-pagination-quick button { position: relative; isolation: isolate; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--ink); }
-.watch-pagination-quick button::before { content: ''; position: absolute; z-index: -1; inset: 8px 6px; border-radius: 999px; background: var(--watch-selected); opacity: 0; }
-.watch-pagination-quick button:not(:disabled):is(:hover, :focus-visible)::before { opacity: 1; }
-.watchlist-page .watch-pagination-quick button:focus-visible { outline-offset: -6px; }
-.watch-pagination-quick button:disabled { color: var(--muted); opacity: .42; }
-.watch-pagination-page { min-width: 4ch; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1; text-align: center; white-space: nowrap; }
-.watch-pagination-page strong { color: var(--ink); font-weight: 650; }
-.watch-pagination-separator { opacity: .68; }
 .watch-indexing { margin: 0 0 8px; padding: 0; font-size: 12px; }
 .watch-batch { position: sticky; top: 90px; z-index: 5; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 5px 6px 5px 10px; margin-bottom: 12px; border: 1px solid var(--watch-control-line); border-radius: 13px; background: color-mix(in srgb, var(--surface) 94%, var(--watch-selected)); box-shadow: 0 12px 27px -20px var(--ink); }
 .watch-batch-count { display: inline-flex; align-items: center; gap: 7px; padding-inline-end: 10px; border-inline-end: 1px solid var(--watch-control-line); color: var(--ink); white-space: nowrap; }

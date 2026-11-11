@@ -10,6 +10,7 @@ import '../calendar.css';
 
 const state = useAppState();
 const scheduleHelp = ref<HTMLDetailsElement>();
+const favoritesFilter = ref<HTMLInputElement>();
 function closeHelpOutside(event: PointerEvent) {
   const help = scheduleHelp.value;
   if (help?.open && event.target instanceof Node && !help.contains(event.target)) help.open = false;
@@ -20,6 +21,10 @@ function closeHelpOnEscape(event: KeyboardEvent) {
 onMounted(() => { document.addEventListener('pointerdown', closeHelpOutside, true); document.addEventListener('keydown', closeHelpOnEscape); });
 onUnmounted(() => { document.removeEventListener('pointerdown', closeHelpOutside, true); document.removeEventListener('keydown', closeHelpOnEscape); });
 const onlyFavorites = computed({ get: () => state.browse.weekly.onlyFavorites, set: value => { state.browse.weekly.onlyFavorites = value; } });
+function showAllEvents() {
+  onlyFavorites.value = false;
+  favoritesFilter.value?.focus();
+}
 const selectedDay = computed({ get: () => state.browse.weekly.selectedDay, set: value => { state.browse.weekly.selectedDay = value; } });
 if (!selectedDay.value) selectedDay.value = dateKey(state.now.value, state.timezone.value);
 const window = computed(() => weekWindow(state.now.value, state.timezone.value));
@@ -32,7 +37,7 @@ const days = computed(() => Array.from({ length: 7 }, (_, index) => {
 }));
 watch(window, () => { if (!days.value.some(day => day.key === selectedDay.value)) selectedDay.value = today.value; }, { immediate: true });
 const calendarElement = ref<HTMLElement>();
-const calendarMotion = useListMotion(calendarElement, () => [state.weeklyLayout.value, selectedDay.value, onlyFavorites.value]);
+const calendarMotion = useListMotion(calendarElement, () => state.weeklyLayout.value);
 const active = computed(() => state.catalog.value ? effectiveActiveIds(state.catalog.value) : new Set<string>());
 const inactive = computed(() => new Set(state.catalog.value?.overrides.active.filter(item => !item.active).map(item => item.animeId)));
 const items = computed(() => new Map(state.catalog.value?.items.map(x => [x.id, x])));
@@ -124,14 +129,19 @@ onBeforeUnmount(() => {
 <template>
   <section class="weekly-page" aria-label="本周网络更新参考">
     <FeaturedHero />
-    <div class="view-heading weekly-heading"><div><h1>本周番表<span class="heading-dot">.</span></h1><p>{{ days[0]?.short }} — {{ days[6]?.short }}</p></div><div class="weekly-controls"><div class="weekly-layout-switch" role="group" aria-label="番表布局"><button aria-label="竖列番表" :aria-pressed="state.weeklyLayout.value === 'columns'" @click="state.setWeeklyLayout('columns')"><Icon name="columns" :size="16" /><span>竖列</span></button><button aria-label="横排番表" :aria-pressed="state.weeklyLayout.value === 'rows'" @click="state.setWeeklyLayout('rows')"><Icon name="rows" :size="16" /><span>横排</span></button></div><label class="checkbox-label"><input v-model="onlyFavorites" type="checkbox" />仅看收藏</label></div></div>
-    <div class="week-meta"><span class="weekly-count">{{ events.length }} 条排期</span><details ref="scheduleHelp" class="schedule-help"><summary><Icon name="info" :size="14" />排期说明</summary><p>采用已收录的常规网络配信排期，含跨季续播。周期推算不代表平台已更新；未核实网络时间的作品列为待定。</p></details></div>
-    <div class="day-tabs" role="group" aria-label="选择日期"><button v-for="day in days" :key="day.key" :aria-label="`${day.name} ${day.short}`" :aria-pressed="selectedDay === day.key" :class="{ selected: selectedDay === day.key, today: today === day.key }" @click="selectedDay = day.key"><span>{{ day.name.slice(2) }}</span><strong>{{ day.day }}</strong></button></div>
-    <div ref="calendarElement" class="weekly-grid" :data-layout="state.weeklyLayout.value">
+    <div class="view-heading weekly-heading"><div><h1>本周番表<span class="heading-dot">.</span></h1><p>{{ days[0]?.short }} — {{ days[6]?.short }}</p></div><div class="weekly-controls"><div class="weekly-layout-switch" role="group" aria-label="番表布局"><button aria-label="竖列番表" :aria-pressed="state.weeklyLayout.value === 'columns'" @click="state.setWeeklyLayout('columns')"><Icon name="columns" :size="16" /><span>竖列</span></button><button aria-label="横排番表" :aria-pressed="state.weeklyLayout.value === 'rows'" @click="state.setWeeklyLayout('rows')"><Icon name="rows" :size="16" /><span>横排</span></button></div><label class="checkbox-label"><input ref="favoritesFilter" v-model="onlyFavorites" type="checkbox" />仅看收藏</label></div></div>
+    <div class="week-meta"><span class="weekly-count" aria-live="polite" aria-atomic="true">{{ events.length }} 条排期</span><details ref="scheduleHelp" class="schedule-help"><summary><Icon name="info" :size="14" />排期说明</summary><p>采用已收录的常规网络配信排期，含跨季续播。周期推算不代表平台已更新；未核实网络时间的作品列为待定。</p></details></div>
+    <div v-if="events.length" class="day-tabs" role="group" aria-label="选择日期"><button v-for="day in days" :key="day.key" :aria-label="`${day.name} ${day.short}`" :aria-pressed="selectedDay === day.key" :class="{ selected: selectedDay === day.key, today: today === day.key }" @click="selectedDay = day.key"><span>{{ day.name.slice(2) }}</span><strong>{{ day.day }}</strong></button></div>
+    <div v-if="events.length" ref="calendarElement" class="weekly-grid" :data-layout="state.weeklyLayout.value">
       <section v-for="day in grouped" :key="day.key" class="day-column" :class="{ today: day.key === today, 'mobile-selected': day.key === selectedDay }" :data-day="day.key" :aria-label="day.name">
         <header class="day-heading"><div class="day-heading-date"><time :datetime="day.key"><strong>{{ day.day }}</strong><span class="day-month">{{ Number(day.key.slice(5, 7)) }}月</span></time><span>{{ day.name.replace('星期', '周') }}</span></div><div class="day-heading-meta"><span>{{ day.entries.length }} 条</span><small v-if="day.key === today">今天</small></div></header>
         <div class="day-entries" @scroll.passive="horizontalScrolled" @pointerdown.passive="cancelHorizontalRestore" @touchstart.passive="cancelHorizontalRestore"><AnimeCard v-for="event in day.entries" :key="`${event.animeId}-${event.at}`" :anime="items.get(event.animeId)!" :event="event" compact lightframe /><div v-if="!day.entries.length" class="day-empty"><span>—</span><p>{{ onlyFavorites ? '暂无收藏排期' : '暂无参考排期' }}</p></div></div>
       </section>
+    </div>
+    <div v-else class="week-empty">
+      <span class="week-empty-icon"><Icon name="calendar" :size="18" /></span>
+      <p>{{ onlyFavorites ? '本周暂无收藏排期' : '本周暂无参考排期' }}</p>
+      <button v-if="onlyFavorites" class="button" type="button" @click="showAllEvents">查看全部排期</button>
     </div>
     <section v-if="pending.length" class="pending-section"><div class="section-heading"><h2>排期待定 <span>{{ pending.length }}</span></h2></div><div class="pending-links"><a v-for="anime in pending" :key="anime.id" :href="`#/anime/${anime.id}`">{{ anime.title }}<Icon name="chevron" :size="14" /></a></div></section>
     <section v-if="todayPosters.length" class="today-posters" aria-label="今日片单"><div class="section-heading"><h2>今日片单</h2><span>{{ days.find(day => day.key === today)?.short }}</span></div><div class="poster-grid"><AnimeCard v-for="anime in todayPosters" :key="anime.id" :anime="anime" showcase /></div></section>

@@ -105,6 +105,23 @@
   .frame-hero{--hero-poster-width:140px;--hero-poster-right:4.5%;height:310px}.frame-copy{padding-left:28px;width:55%;padding-top:25px}.frame-hero .hero-work h2{font-size:28px}.frame-title-stage{min-height:102px}.frame-visual-stage{top:18px;bottom:18px;width:168px}.frame-poster-stage{right:14px}.frame-hero .hero-pagination{left:0;right:0;width:100%;grid-template-columns:32px minmax(0,1fr) 32px}.frame-hero .hero-pagination:before{display:none}.frame-hero .hero-pagination button{height:30px}.frame-hero .hero-pagination button:after{inset:-7px -6px}.frame-hero .broadcast-date{right:0;top:204px;width:100%;transform:none}.frame-hero .broadcast-date>strong{display:none}.frame-hero .broadcast-short-date{display:block}.broadcast-edition{display:none}.frame-airing{margin-bottom:15px}
 }
 @media(min-width:1200px) and (max-width:1279px){.frame-hero{--hero-poster-width:184px}.frame-copy{width:57%}.frame-visual-stage{width:380px}.frame-hero .hero-work h2{font-size:31px}}
+@media(min-width:901px) and (max-height:820px){
+  .frame-hero{--hero-poster-width:158px;height:auto;margin-bottom:18px}
+  .frame-copy{height:auto;min-height:266px;padding-block:14px}
+  .frame-eyebrow{margin-bottom:8px}
+  .frame-title-stage{min-height:122px}
+  .frame-hero.is-empty .frame-title-stage{min-height:82px}
+  .frame-airing{min-height:34px;margin-bottom:8px}
+  .frame-visual-stage{top:14px;bottom:12px;width:350px}
+}
+@media(min-width:901px) and (max-width:1199px) and (max-height:820px){
+  .frame-hero{--hero-poster-width:116px}
+  .frame-copy{min-height:250px}
+  .frame-title-stage{min-height:105px}
+  .frame-visual-stage{width:164px}
+  .frame-hero .broadcast-date{top:calc(var(--hero-poster-width) * 1.4 + 8px)}
+  .frame-hero .hero-pagination{bottom:4px}
+}
 @media(max-width:767px){
   .frame-hero{--hero-poster-width:88px;--hero-poster-right:14px;--hero-title-lines:3;height:248px;border-radius:18px;margin-bottom:18px}.frame-copy{padding:19px 0 18px 18px;width:calc(100% - var(--hero-poster-width) - var(--hero-poster-right) - 30px)}
   .frame-hero:before{background:linear-gradient(90deg,var(--surface),color-mix(in srgb,var(--surface) 94%,transparent) 53%,color-mix(in srgb,var(--surface) 30%,transparent) 74%,transparent)}

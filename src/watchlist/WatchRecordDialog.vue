@@ -5,7 +5,7 @@ import Poster from '../components/Poster.vue';
 import { useAppState } from '../state';
 import { defaultWatchRecord, WATCH_LIMITS, WATCH_STATUSES, WATCH_STATUS_LABELS, type WatchRecord, type WatchRecordPatch, type WatchStatus } from './model';
 
-const props = defineProps<{ id: string; focus?: 'date' }>();
+const props = defineProps<{ id: string; focus?: 'date'; pointerOpened?: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 const state = useAppState();
 const dialog = ref<HTMLDialogElement>(), heading = ref<HTMLElement>(), dateField = ref<HTMLInputElement>();
@@ -39,7 +39,9 @@ watch(() => state.watchReady.value && !state.watchStorageError.value, async read
 }, { immediate: true });
 
 function close() {
-  if (!busy.value) dialog.value?.close();
+  if (busy.value) return;
+  dialog.value?.close();
+  emit('close');
 }
 
 function stepCount(delta: -1 | 1) {
@@ -84,7 +86,7 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <dialog ref="dialog" class="watch-record-dialog" aria-labelledby="watch-record-heading" @close="emit('close')" @cancel.prevent="close" @click.self="close">
+    <dialog ref="dialog" class="watch-record-dialog" :data-pointer-open="pointerOpened || undefined" aria-labelledby="watch-record-heading" @cancel.prevent="close" @click.self="close">
       <form class="watch-record-form" @submit.prevent="submit">
         <header class="watch-record-head">
           <div class="watch-record-cover" aria-hidden="true">
@@ -169,6 +171,18 @@ onUnmounted(() => {
   box-shadow: 0 22px 68px #0c14294a;
 }
 .watch-record-dialog::backdrop { background: #111b37a0; }
+.watch-record-dialog[open][data-pointer-open] {
+  transition: opacity 200ms cubic-bezier(.22,1,.36,1), transform 200ms cubic-bezier(.22,1,.36,1);
+}
+@starting-style {
+  .watch-record-dialog[open][data-pointer-open] { opacity: .65; transform: translateY(8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .watch-record-dialog[open][data-pointer-open] { transition: opacity 100ms cubic-bezier(.22,1,.36,1) !important; }
+  @starting-style {
+    .watch-record-dialog[open][data-pointer-open] { opacity: .85; transform: none; }
+  }
+}
 .watch-record-form {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;

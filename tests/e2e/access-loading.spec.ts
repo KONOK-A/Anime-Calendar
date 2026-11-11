@@ -26,7 +26,7 @@ test('访问优化：重载先显示持久缓存，API变慢不再阻塞已有�
 test('访问优化：快速换季度仅应用最新范围，未加载完成不夹掉已保存页码', async ({ page }) => {
   await page.goto('/#/season/2025/4');
   await expect(page.locator('.catalog-page .anime-card')).toHaveCount(24);
-  await page.getByRole('button', { name: '下一页' }).click();
+  await page.getByRole('navigation', { name: '作品分页', exact: true }).getByRole('button', { name: '下一页' }).click();
   await expect(page.locator('.catalog-page .anime-card')).toHaveCount(1);
   await page.goto('/#/season/2026/4');
   await expect(page.locator('.catalog-page .anime-card').first()).toBeVisible();
