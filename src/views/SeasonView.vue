@@ -97,7 +97,7 @@ async function changePage(value: number) {
         <select class="catalog-picker quarter-picker" aria-label="季度" :value="quarter" @change="changeQuarter"><option value="1">冬季 · 1—3月</option><option value="2">春季 · 4—6月</option><option value="3">夏季 · 7—9月</option><option value="4">秋季 · 10—12月</option></select>
       </div>
       <div class="catalog-filters">
-        <label class="search-field"><Icon name="search" :size="18" /><input ref="searchInput" v-model="query" type="search" aria-label="搜索作品" placeholder="搜索本季度标题或别名" /></label>
+        <label class="search-field"><Icon name="search" :size="18" /><input ref="searchInput" v-model="query" type="search" enterkeyhint="search" aria-label="搜索作品" placeholder="搜索本季度标题或别名" /></label>
         <select v-model="type" class="catalog-picker type-picker" aria-label="作品类型"><option value="">全部类型</option><option value="tv">TV 动画</option><option value="web">Web 动画</option></select>
         <select ref="sortPicker" v-model="sort" class="catalog-picker sort-picker" aria-label="作品排序"><option value="premiere">首播顺序</option><option value="rating">评分从高到低</option></select>
         <div class="catalog-density" role="group" aria-label="每行作品数量" :style="{ '--density-index': state.catalogColumns.value - 4 }"><span class="density-marker" aria-hidden="true" />

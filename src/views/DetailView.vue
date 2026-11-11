@@ -144,7 +144,9 @@ function expandCharacters(event: Event) {
 .synopsis{font-size:15px;line-height:2.05}.detail-facts{font-size:13px;gap:14px}.detail-facts>div{grid-template-columns:108px minmax(0,1fr)}
 .platforms-heading{position:relative;isolation:isolate}
 .platform-arrival{position:absolute;inset-block:-4px;inset-inline-start:-5px;inline-size:min(100%,180px);z-index:-1;border-radius:9px;background:color-mix(in srgb,var(--accent) 12%,transparent);opacity:0;pointer-events:none}
-.platform-list a{border-radius:11px;padding:13px;background:var(--surface);box-shadow:0 5px 13px -12px var(--accent);transition:border-color .16s,transform .16s,box-shadow .16s}.platform-list a:hover{border-color:var(--accent);transform:translateY(-2px)}
+.platform-list a{border-radius:11px;padding:13px;background:var(--surface);box-shadow:0 5px 13px -12px var(--accent);transition:border-color .16s,transform .16s,box-shadow .16s}
+@media(hover:hover) and (pointer:fine){.platform-list a:hover{border-color:var(--accent);transform:translateY(-2px)}}
+@media(pointer:coarse){.platform-list a:active{background:var(--soft);border-color:var(--accent)}}
 .platform-list strong{font-size:13px;font-weight:550}.platform-list small{font-size:11px;line-height:1.75}
 .synopsis-original,.more-cast{border-radius:11px}.synopsis-original[open]>.synopsis,.more-cast[open]>.cast-list{animation:detail-reveal .18s ease-out}
 @keyframes detail-reveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}

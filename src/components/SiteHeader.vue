@@ -48,29 +48,30 @@ function themeChanged(event: Event) { state.appearance.setTheme((event.target as
 
 <style scoped>
 .header-sentinel{position:absolute;top:0;left:0;width:1px;height:1px;pointer-events:none}
-.lightframe-header{height:76px;background:color-mix(in srgb,var(--surface) 76%,transparent);border-bottom:1px solid color-mix(in srgb,var(--line) 75%,transparent);backdrop-filter:blur(18px);box-shadow:none;transition:background-color .2s,box-shadow .2s}
+.lightframe-header{height:calc(76px + var(--safe-area-top));padding-top:var(--safe-area-top);background:color-mix(in srgb,var(--surface) 76%,transparent);border-bottom:1px solid color-mix(in srgb,var(--line) 75%,transparent);backdrop-filter:blur(18px);box-shadow:none;transition:background-color .2s,box-shadow .2s}
 .lightframe-header.is-scrolled{background:var(--glass);box-shadow:0 5px 24px color-mix(in srgb,var(--ink) 5%,transparent)}
-.header-inner{min-height:76px;height:76px;gap:32px;max-width:1600px;padding:0 40px}
+.header-inner{min-height:76px;height:76px;gap:32px;max-width:1600px;padding:0 max(40px,calc(var(--safe-area-right) + 8px)) 0 max(40px,calc(var(--safe-area-left) + 8px))}
 .brand{gap:11px}
 .brand-mark{position:relative;width:39px;height:43px;border-radius:12px;border-color:color-mix(in srgb,var(--accent) 45%,var(--surface));background:linear-gradient(145deg,var(--surface),var(--soft));box-shadow:inset 0 1px 0 var(--surface-glint),0 4px 10px color-mix(in srgb,var(--accent) 9%,transparent);transform:rotate(-7deg)}
 .brand-mark i{position:absolute;right:-3px;top:-3px;width:7px;height:7px;border:2px solid var(--surface);border-radius:50%;background:var(--warm)}
 .brand>span:last-child{font-size:29px;letter-spacing:3px}.brand small{font-size:10px;letter-spacing:1.5px;margin-top:5px}
 .main-nav{--indicator-inset:12;position:relative;display:flex;gap:4px;height:76px;min-height:0;padding:0;align-self:stretch;background:transparent;border:0}
 .main-nav>a{z-index:1;gap:7px;padding:0 13px;min-height:0;font-size:14px;font-weight:550;transition:color .16s}
-.main-nav>a:hover{color:var(--accent)}.main-nav>a.active:after{display:none}
+.main-nav>a.active:after{display:none}
+@media(hover:hover) and (pointer:fine){.main-nav>a:hover{color:var(--accent)}}
 .nav-indicator{position:absolute;left:0;bottom:12px;width:100px;height:3px;border-radius:3px;background:var(--frame-gradient);transform:translateX(var(--indicator-x,0px)) scaleX(var(--indicator-scale,0));transform-origin:left;opacity:var(--indicator-visible,0);transition:transform .24s cubic-bezier(.22,1,.36,1),opacity .16s;pointer-events:none}
 .nav-count{font-size:10px;padding:0 5px;background:var(--soft)}
 .toolbar-controls{gap:7px}.toolbar-controls>label{height:38px;border-radius:10px;background:color-mix(in srgb,var(--surface) 85%,transparent)}
 .toolbar-controls select{height:36px;color:var(--muted)}.toolbar-controls .refresh-button{height:38px;min-height:38px;border-radius:10px;padding:6px 12px}
-@media(min-width:901px) and (max-width:1199px){.header-inner{padding:0 28px;gap:16px}.main-nav>a{padding:0 9px;font-size:13px}.toolbar-controls{gap:5px}.toolbar-controls .refresh-button span{display:none}.toolbar-controls .refresh-button{padding:6px 10px}}
+@media(min-width:901px) and (max-width:1199px){.header-inner{padding:0 max(28px,calc(var(--safe-area-right) + 8px)) 0 max(28px,calc(var(--safe-area-left) + 8px));gap:16px}.main-nav>a{padding:0 9px;font-size:13px}.toolbar-controls{gap:5px}.toolbar-controls .refresh-button span{display:none}.toolbar-controls .refresh-button{padding:6px 10px}}
 @media(max-width:900px){
   .lightframe-header{backdrop-filter:none}
-  .header-inner{padding:0 28px;gap:12px}.main-nav{--indicator-inset:6;position:fixed;left:12px;right:12px;bottom:calc(10px + var(--safe-area-bottom));top:auto;width:auto;height:64px;min-height:64px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:6px;gap:0;border:1px solid var(--line);border-radius:20px;background:var(--glass);backdrop-filter:blur(18px);box-shadow:0 8px 32px color-mix(in srgb,var(--ink) 12%,transparent);z-index:40}
+  .header-inner{padding:0 max(28px,calc(var(--safe-area-right) + 8px)) 0 max(28px,calc(var(--safe-area-left) + 8px));gap:12px}.main-nav{--indicator-inset:6;position:fixed;left:max(12px,calc(var(--safe-area-left) + 8px));right:max(12px,calc(var(--safe-area-right) + 8px));bottom:calc(10px + var(--safe-area-bottom));top:auto;width:auto;height:64px;min-height:64px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:6px;gap:0;border:1px solid var(--line);border-radius:20px;background:var(--glass);backdrop-filter:blur(18px);box-shadow:0 8px 32px color-mix(in srgb,var(--ink) 12%,transparent);z-index:40}
   .main-nav>a{min-height:50px;padding:4px;flex-direction:column;justify-content:center;gap:2px;font-size:12px}.main-nav svg{width:18px;height:18px}.nav-count{top:3px;left:calc(50% + 10px)}
   .nav-indicator{height:50px;bottom:6px;border-radius:13px;background:var(--soft);box-shadow:inset 0 1px 0 var(--overlay-line)}
 }
 @media(max-width:767px){
-  .lightframe-header,.header-inner{height:68px;min-height:68px}.header-inner{padding:0 16px;gap:8px}.brand{gap:7px}.brand-mark{width:28px;height:32px;border-radius:9px}.brand>span:last-child{font-size:24px;letter-spacing:1px}.brand small{display:none}
+  .lightframe-header{height:calc(68px + var(--safe-area-top));min-height:calc(68px + var(--safe-area-top))}.header-inner{height:68px;min-height:68px;padding:0 max(16px,calc(var(--safe-area-right) + 8px)) 0 max(16px,calc(var(--safe-area-left) + 8px));gap:8px}.brand{gap:7px}.brand-mark{width:28px;height:32px;border-radius:9px}.brand>span:last-child{font-size:24px;letter-spacing:1px}.brand small{display:none}
   .toolbar-controls{gap:5px}.toolbar-controls>label{height:44px}.toolbar-controls select{height:42px;font-size:11px}.toolbar-controls .timezone-control select{width:94px}.toolbar-controls .theme-control select{width:76px}.toolbar-controls .refresh-button{height:44px;min-height:44px;min-width:40px;padding:6px;border:0}.refresh-button span{display:none}
 }
 @media(max-width:379px){.brand-mark{display:none}.brand>span:last-child{font-size:22px}.header-inner{gap:6px}.toolbar-controls{gap:4px}.toolbar-controls .timezone-control select{width:84px}.toolbar-controls .theme-control select{width:76px;padding-left:8px}.toolbar-controls .theme-control>svg{display:none}.toolbar-controls .refresh-button{min-width:40px}}

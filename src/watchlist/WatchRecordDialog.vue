@@ -133,7 +133,7 @@ onUnmounted(() => {
                 <button v-if="plannedDate" type="button" class="watch-record-clear" aria-label="清空计划日期" title="清空计划日期" @click="clearPlanDate"><Icon name="close" :size="16" /></button>
               </div>
             </div>
-            <label class="watch-record-field"><span>个人评分</span><input v-model="score" type="number" min="0.5" max="10" step="0.5" placeholder="满分 10" /></label>
+            <label class="watch-record-field"><span>个人评分</span><input v-model="score" type="number" inputmode="decimal" min="0.5" max="10" step="0.5" placeholder="满分 10" /></label>
             <label class="watch-record-field watch-record-wide"><span>备注</span><textarea v-model="note" rows="3" :maxlength="WATCH_LIMITS.note" placeholder="留给自己的一点记录" /></label>
             <div v-if="state.watchlist.value.lists.length" class="watch-record-wide watch-record-memberships" role="group" aria-label="所属清单">
               <span>所属清单</span>
@@ -204,7 +204,10 @@ onUnmounted(() => {
 .watch-record-head p { margin-top: 4px; font: 22px/1.25 WenKai, 'Microsoft YaHei', sans-serif; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .watch-record-close, .watch-record-clear, .watch-record-stepper button { display: grid; place-items: center; min-width: 44px; min-height: 44px; color: var(--muted); background: transparent; }
 .watch-record-close, .watch-record-clear { flex: 0 0 44px; border-radius: 8px; }
-.watch-record-close:hover, .watch-record-clear:hover, .watch-record-stepper button:not([aria-disabled='true']):hover { color: var(--ink); background: var(--record-selected); }
+@media (hover: hover) and (pointer: fine) {
+  .watch-record-close:hover, .watch-record-clear:hover, .watch-record-stepper button:not([aria-disabled='true']):hover { color: var(--ink); background: var(--record-selected); }
+}
+.watch-record-close:not(:disabled):active, .watch-record-clear:not(:disabled):active, .watch-record-stepper button:not([aria-disabled='true']):active { color: var(--ink); background: var(--record-selected); }
 .watch-record-body { min-height: 0; padding: 15px var(--watch-dialog-gutter) 16px; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 12px; }
 .watch-record-retry { margin-top: 12px; }
 .watch-record-fields { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px 14px; min-width: 0; margin: 0; padding: 0; border: 0; }
@@ -219,7 +222,10 @@ onUnmounted(() => {
 .watch-record-status legend { margin-bottom: 5px; padding: 0; }
 .watch-record-status-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
 .watch-record-status-options label { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; min-height: 44px; padding: 3px 2px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); background: var(--record-control-surface); cursor: pointer; font-size: 13px; white-space: nowrap; }
-.watch-record-status-options label:hover { border-color: var(--record-control-line); color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  .watch-record-status-options label:hover { border-color: var(--record-control-line); color: var(--ink); }
+}
+.watch-record-status-options label:has(input:not(:disabled)):active { border-color: var(--record-control-line); color: var(--ink); }
 .watch-record-status-options label:has(input:checked) { border-color: var(--record-control-line); color: var(--ink); background: var(--record-selected); font-weight: 650; }
 .watch-record-status-options input { appearance: none; display: grid; place-items: center; flex: 0 0 11px; width: 11px; height: 11px; margin: 0; border: 1px solid var(--muted); border-radius: 50%; cursor: inherit; }
 .watch-record-status-options input:checked { border-color: var(--record-focus); }
@@ -249,6 +255,10 @@ onUnmounted(() => {
   .watch-record-dialog { --watch-dialog-height: calc(100dvh - 12px); --watch-dialog-gutter: 16px; width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 17px 17px 0 0; }
   .watch-record-head { padding-block: 12px; }
   .watch-record-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); justify-content: stretch; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .watch-record-fields input:not([type='checkbox'], [type='radio']), .watch-record-fields textarea { font-size: 16px; }
+  .watch-record-head, .watch-record-body, .watch-record-actions { padding-inline-start: calc(var(--watch-dialog-gutter) + var(--safe-area-left, env(safe-area-inset-left, 0px))); padding-inline-end: calc(var(--watch-dialog-gutter) + var(--safe-area-right, env(safe-area-inset-right, 0px))); }
+}
+@media (pointer: coarse) {
   .watch-record-fields input:not([type='checkbox'], [type='radio']), .watch-record-fields textarea { font-size: 16px; }
 }
 @media (max-width: 359px) {

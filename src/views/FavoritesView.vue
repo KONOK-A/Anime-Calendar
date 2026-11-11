@@ -449,7 +449,7 @@ function openAssign(ids: string[]) { open(lists.value.length ? { kind: 'assign',
               <a v-else-if="browse.section === 'all'" href="#/season" class="button">去季度目录添加<Icon name="chevron" :size="14" /></a>
             </div>
             <div class="watch-filters">
-              <label class="watch-search"><Icon name="search" :size="17" /><input ref="searchInput" v-model="browse.query" type="search" maxlength="120" aria-label="搜索追番作品" placeholder="搜索标题、原名或别名" /></label>
+              <label class="watch-search"><Icon name="search" :size="17" /><input ref="searchInput" v-model="browse.query" type="search" enterkeyhint="search" maxlength="120" aria-label="搜索追番作品" placeholder="搜索标题、原名或别名" /></label>
               <div class="watch-filter-pickers">
                 <WatchSelect v-model="browse.season" :options="quarterChoices" label="筛选追番季度" icon="calendar" />
                 <WatchSelect :model-value="browse.sort" :options="sortChoices" label="追番排序" icon="rows" @update:model-value="changeSort" />
